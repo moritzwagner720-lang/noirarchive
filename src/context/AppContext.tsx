@@ -25,6 +25,7 @@ import { validateUsername, validatePassword, hashPassword, verifyPassword } from
 import { createTransferPackage, CreateTransferInput } from '../utils/transfer';
 import { canSendFriendRequest, createFriendRequest, createChatMessage } from '../utils/friends';
 import { createPublishedPackage, togglePackageLike, CreatePublishedInput } from '../utils/published';
+import { apiUrl } from '../utils/api';
 
 interface AppContextType {
   // Data
@@ -65,10 +66,16 @@ interface AppContextType {
     bio?: string;
     location?: string;
     avatar?: string;
-  }) => { success: boolean; error?: string };
-  signIn: (username: string, password: string) => { success: boolean; error?: string };
+  }) => Promise<{ success: boolean; error?: string }> | { success: boolean; error?: string };
+  signIn: (username: string, password: string) => Promise<{ success: boolean; error?: string }> | { success: boolean; error?: string };
   signOut: () => void;
   switchUserQuick: (username: string) => void;
+  searchAccountsGlobally: (query: string) => Promise<User[]>;
+
+  // Avatar Management Modal
+  isAvatarModalOpen: boolean;
+  setIsAvatarModalOpen: (open: boolean) => void;
+  updateUserAvatar: (avatar: string) => Promise<void> | void;
 
   // Project Management
   createProject: (data: {
@@ -115,6 +122,7 @@ interface AppContextType {
   isPublishModalOpen: boolean;
   setIsPublishModalOpen: (open: boolean) => void;
 }
+
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
@@ -208,6 +216,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [authModal, setAuthModal] = useState<'signin' | 'signup' | null>(null);
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
+  const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
   const [preselectedTransferProject, setPreselectedTransferProject] = useState<Project | null>(null);
   const [activeTransferPortalId, setActiveTransferPortalId] = useState<string | null>(null);
   const [activeChatFriend, setActiveChatFriend] = useState<string | null>('elena_k');
@@ -300,14 +309,180 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   }, [projects, photos, transfers, friendRequests, chatMessages]);
 
-  // Synchronize state with backend server (shared across all devices & users)
+  // Synchronize state with backend server via SSE & high-efficiency polling
   useEffect(() => {
     let isMounted = true;
+    let es: EventSource | null = null;
+
+    // Real-Time Server-Sent Events (SSE) Listener
+    try {
+      es = new EventSource(apiUrl('/api/events'));
+
+      es.addEventListener('new_message', (e) => {
+        try {
+          const msg: ChatMessage = JSON.parse(e.data);
+          if (isMounted) {
+            setChatMessages(prev => (prev.some(m => m.id === msg.id) ? prev : [...prev, msg]));
+          }
+        } catch {}
+      });
+
+      es.addEventListener('friend_request_created', (e) => {
+        try {
+          const req: FriendRequest = JSON.parse(e.data);
+          if (isMounted) {
+            setFriendRequests(prev => (prev.some(r => r.id === req.id) ? prev : [req, ...prev]));
+          }
+        } catch {}
+      });
+
+      es.addEventListener('friend_request_accepted', (e) => {
+        try {
+          const { id, users: updatedUsers } = JSON.parse(e.data);
+          if (isMounted) {
+            setFriendRequests(prev => prev.map(r => (r.id === id ? { ...r, status: 'accepted' } : r)));
+            if (Array.isArray(updatedUsers)) {
+              setUsers(prev => {
+                const map = new Map<string, User>();
+                prev.forEach(u => map.set(u.username.toLowerCase(), u));
+                updatedUsers.forEach((u: User) => {
+                  const ex = map.get(u.username.toLowerCase());
+                  map.set(u.username.toLowerCase(), {
+                    ...u,
+                    passwordHash: ex?.passwordHash || hashPassword('password123'),
+                    friends: u.friends || [],
+                  });
+                });
+                return Array.from(map.values());
+              });
+            }
+          }
+        } catch {}
+      });
+
+      es.addEventListener('friend_request_declined', (e) => {
+        try {
+          const { id } = JSON.parse(e.data);
+          if (isMounted) {
+            setFriendRequests(prev => prev.map(r => (r.id === id ? { ...r, status: 'declined' } : r)));
+          }
+        } catch {}
+      });
+
+      es.addEventListener('friend_request_cancelled', (e) => {
+        try {
+          const { id } = JSON.parse(e.data);
+          if (isMounted) {
+            setFriendRequests(prev => prev.filter(r => r.id !== id));
+          }
+        } catch {}
+      });
+
+      es.addEventListener('new_transfer', (e) => {
+        try {
+          const pkg: FileTransferPackage = JSON.parse(e.data);
+          if (isMounted) {
+            setTransfers(prev => {
+              const idx = prev.findIndex(t => t.id === pkg.id);
+              if (idx >= 0) {
+                const copy = [...prev];
+                copy[idx] = pkg;
+                return copy;
+              }
+              return [pkg, ...prev];
+            });
+          }
+        } catch {}
+      });
+
+      es.addEventListener('transfer_downloaded', (e) => {
+        try {
+          const { id, downloadsCount } = JSON.parse(e.data);
+          if (isMounted) {
+            setTransfers(prev => prev.map(t => (t.id === id ? { ...t, downloadsCount } : t)));
+          }
+        } catch {}
+      });
+
+      es.addEventListener('transfer_revoked', (e) => {
+        try {
+          const { id } = JSON.parse(e.data);
+          if (isMounted) {
+            setTransfers(prev => prev.map(t => (t.id === id ? { ...t, status: 'revoked' } : t)));
+          }
+        } catch {}
+      });
+
+      es.addEventListener('transfer_reviewed', (e) => {
+        try {
+          const { id, review } = JSON.parse(e.data);
+          if (isMounted) {
+            setTransfers(prev => prev.map(t => (t.id === id ? { ...t, reviews: [review, ...(t.reviews || [])] } : t)));
+          }
+        } catch {}
+      });
+
+      es.addEventListener('new_published', (e) => {
+        try {
+          const pkg: PublishedPackage = JSON.parse(e.data);
+          if (isMounted) {
+            setPublishedPackages(prev => {
+              const idx = prev.findIndex(p => p.id === pkg.id);
+              if (idx >= 0) {
+                const copy = [...prev];
+                copy[idx] = pkg;
+                return copy;
+              }
+              return [pkg, ...prev];
+            });
+          }
+        } catch {}
+      });
+
+      es.addEventListener('published_liked', (e) => {
+        try {
+          const { id, likesCount, likedBy } = JSON.parse(e.data);
+          if (isMounted) {
+            setPublishedPackages(prev => prev.map(p => (p.id === id ? { ...p, likesCount, likedBy } : p)));
+          }
+        } catch {}
+      });
+
+      es.addEventListener('published_downloaded', (e) => {
+        try {
+          const { id, downloadsCount } = JSON.parse(e.data);
+          if (isMounted) {
+            setPublishedPackages(prev => prev.map(p => (p.id === id ? { ...p, downloadsCount } : p)));
+          }
+        } catch {}
+      });
+
+      es.addEventListener('user_registered', (e) => {
+        try {
+          const u: User = JSON.parse(e.data);
+          if (isMounted) {
+            setUsers(prev => (prev.some(item => item.username.toLowerCase() === u.username.toLowerCase()) ? prev : [...prev, u]));
+          }
+        } catch {}
+      });
+
+      es.addEventListener('user_updated', (e) => {
+        try {
+          const u: User = JSON.parse(e.data);
+          if (isMounted) {
+            setUsers(prev => prev.map(item => (item.username.toLowerCase() === u.username.toLowerCase() ? { ...item, ...u } : item)));
+            if (currentUserRef.current?.username.toLowerCase() === u.username.toLowerCase()) {
+              setCurrentUser(prev => (prev ? { ...prev, ...u } : null));
+            }
+          }
+        } catch {}
+      });
+    } catch {}
 
     const syncWithServer = async () => {
       try {
         // 1. Sync users
-        const usersRes = await fetch('/api/users');
+        const usersRes = await fetch(apiUrl('/api/users'));
         if (usersRes.ok) {
           const serverUsers: User[] = await usersRes.json();
           if (isMounted && Array.isArray(serverUsers) && serverUsers.length > 0) {
@@ -348,7 +523,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }
 
         // 2. Sync friend requests
-        const reqRes = await fetch('/api/friend-requests');
+        const reqRes = await fetch(apiUrl('/api/friend-requests'));
         if (reqRes.ok) {
           const serverRequests = await reqRes.json();
           if (isMounted && Array.isArray(serverRequests)) {
@@ -356,15 +531,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           }
         }
 
-        // 3. Sync chat messages (instant sync so recipient sees messages without page refresh)
-        const chatRes = await fetch('/api/chat-messages');
+        // 3. Sync chat messages
+        const chatRes = await fetch(apiUrl('/api/chat-messages'));
         if (chatRes.ok) {
           const serverMessages: ChatMessage[] = await chatRes.json();
           if (isMounted && Array.isArray(serverMessages)) {
             setChatMessages(prev => {
               const map = new Map<string, ChatMessage>();
               serverMessages.forEach(m => map.set(m.id, m));
-              // Preserve any optimistic messages from the last 15 seconds that might still be saving
               const now = Date.now();
               prev.forEach(m => {
                 if (!map.has(m.id)) {
@@ -380,17 +554,56 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             });
           }
         }
+
+        // 4. Sync transfers from backend
+        const transferRes = await fetch(apiUrl('/api/transfers'));
+        if (transferRes.ok) {
+          const serverTransfers: FileTransferPackage[] = await transferRes.json();
+          if (isMounted && Array.isArray(serverTransfers)) {
+            setTransfers(prev => {
+              const map = new Map<string, FileTransferPackage>();
+              serverTransfers.forEach(t => map.set(t.id, t));
+              prev.forEach(t => {
+                if (!map.has(t.id)) map.set(t.id, t);
+              });
+              return Array.from(map.values()).sort(
+                (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+              );
+            });
+          }
+        }
+
+        // 5. Sync published community packages from backend
+        const pubRes = await fetch(apiUrl('/api/published'));
+        if (pubRes.ok) {
+          const serverPub: PublishedPackage[] = await pubRes.json();
+          if (isMounted && Array.isArray(serverPub)) {
+            setPublishedPackages(prev => {
+              const map = new Map<string, PublishedPackage>();
+              serverPub.forEach(p => map.set(p.id, p));
+              prev.forEach(p => {
+                if (!map.has(p.id)) map.set(p.id, p);
+              });
+              return Array.from(map.values()).sort(
+                (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+              );
+            });
+          }
+        }
       } catch {
-        // Backend offline or fallback
+        // Offline or fallback mode
       }
     };
 
     syncWithServer();
-    // 1-second high-frequency polling for instant messaging responsiveness
-    const interval = setInterval(syncWithServer, 1000);
+    const interval = setInterval(syncWithServer, 2000);
     window.addEventListener('focus', syncWithServer);
+
     return () => {
       isMounted = false;
+      if (es) {
+        es.close();
+      }
       clearInterval(interval);
       window.removeEventListener('focus', syncWithServer);
     };
@@ -408,14 +621,61 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
   };
 
-  // Auth operations (purely username and password, no photographer/studio name)
-  const signUp = (data: {
+  // User Avatar update (persisted to server & locally)
+  const updateUserAvatar = async (newAvatar: string) => {
+    if (!currentUser) return;
+    setCurrentUser(prev => (prev ? { ...prev, avatar: newAvatar } : null));
+    setUsers(prev =>
+      prev.map(u => (u.username.toLowerCase() === currentUser.username.toLowerCase() ? { ...u, avatar: newAvatar } : u))
+    );
+    try {
+      await fetch(apiUrl(`/api/users/${encodeURIComponent(currentUser.username)}/avatar`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ avatar: newAvatar }),
+      });
+    } catch {}
+  };
+
+  // Global search for user accounts across the platform
+  const searchAccountsGlobally = async (query: string): Promise<User[]> => {
+    const clean = query.trim().toLowerCase();
+    if (!clean) return users;
+    try {
+      const res = await fetch(apiUrl(`/api/users/search/${encodeURIComponent(clean)}`));
+      if (res.ok) {
+        const remoteUsers: User[] = await res.json();
+        if (Array.isArray(remoteUsers)) {
+          setUsers(prev => {
+            const map = new Map<string, User>();
+            prev.forEach(u => map.set(u.username.toLowerCase(), u));
+            remoteUsers.forEach(u => {
+              const ex = map.get(u.username.toLowerCase());
+              map.set(u.username.toLowerCase(), {
+                ...u,
+                passwordHash: ex?.passwordHash || hashPassword('password123'),
+                friends: Array.from(new Set([...(ex?.friends || []), ...(u.friends || [])])),
+              });
+            });
+            return Array.from(map.values());
+          });
+          return remoteUsers;
+        }
+      }
+    } catch {}
+    return users.filter(
+      u => u.username.toLowerCase().includes(clean) || (u.bio && u.bio.toLowerCase().includes(clean))
+    );
+  };
+
+  // Auth operations (purely username and password)
+  const signUp = async (data: {
     username: string;
     password: string;
     bio?: string;
     location?: string;
     avatar?: string;
-  }) => {
+  }): Promise<{ success: boolean; error?: string }> => {
     const userVal = validateUsername(data.username, users);
     if (!userVal.isValid) {
       return { success: false, error: userVal.error };
@@ -426,9 +686,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       return { success: false, error: passVal.feedback };
     }
 
+    const cleanUsername = data.username.trim().toLowerCase();
+
+    // Verify uniqueness with backend server to avoid collision across independent sessions
+    try {
+      const checkRes = await fetch(apiUrl(`/api/users/${encodeURIComponent(cleanUsername)}`));
+      if (checkRes.ok) {
+        return { success: false, error: `The username "${cleanUsername}" is already taken` };
+      }
+    } catch {}
+
     const newUser: User = {
       id: `user-${Date.now()}`,
-      username: data.username.trim().toLowerCase(),
+      username: cleanUsername,
       bio: data.bio?.trim() || 'Visual photographer & darkroom artist.',
       avatar:
         data.avatar ||
@@ -439,13 +709,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       friends: [],
     };
 
-    setUsers(prev => [...prev, newUser]);
+    setUsers(prev => [...prev.filter(u => u.username.toLowerCase() !== cleanUsername), newUser]);
     setCurrentUser(newUser);
     setAuthModal(null);
 
-    // Sync to backend server
+    // Save permanently to server
     try {
-      fetch('/api/auth/signup', {
+      const res = await fetch(apiUrl('/api/auth/signup'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -455,14 +725,57 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           avatar: newUser.avatar,
           location: newUser.location,
         }),
-      }).catch(() => {});
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        if (err.error) {
+          return { success: false, error: err.error };
+        }
+      }
     } catch {}
 
     return { success: true };
   };
 
-  const signIn = (username: string, pass: string) => {
+  const signIn = async (username: string, pass: string): Promise<{ success: boolean; error?: string }> => {
     const normalized = username.trim().toLowerCase();
+
+    // First attempt to verify with server for globally synchronized accounts across all devices
+    try {
+      const res = await fetch(apiUrl('/api/auth/signin'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: normalized, password: pass }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.user) {
+          const authenticatedUser: User = {
+            ...data.user,
+            passwordHash: hashPassword(pass),
+            friends: data.user.friends || [],
+          };
+          setUsers(prev => {
+            const map = new Map<string, User>();
+            prev.forEach(u => map.set(u.username.toLowerCase(), u));
+            map.set(authenticatedUser.username.toLowerCase(), authenticatedUser);
+            return Array.from(map.values());
+          });
+          setCurrentUser(authenticatedUser);
+          setAuthModal(null);
+          return { success: true };
+        }
+      } else {
+        const err = await res.json().catch(() => ({}));
+        if (err.error && err.error.includes('password')) {
+          return { success: false, error: err.error };
+        }
+      }
+    } catch {
+      // Backend offline fallback - continue to check local
+    }
+
+    // Local check fallback
     let user = users.find(u => u.username.toLowerCase() === normalized);
 
     if (!user) {
@@ -482,15 +795,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     setCurrentUser(user);
     setAuthModal(null);
-
-    // Sync user login to backend
-    try {
-      fetch('/api/users/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user }),
-      }).catch(() => {});
-    } catch {}
 
     return { success: true };
   };
@@ -602,6 +906,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const pkg = createTransferPackage(input);
       setTransfers(prev => [pkg, ...prev]);
       setPreselectedTransferProject(null);
+
+      // Persist to server for global client delivery
+      try {
+        fetch(apiUrl('/api/transfers'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(pkg),
+        }).catch(() => {});
+      } catch {}
+
       return { success: true, packageId: pkg.id };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to create transfer';
@@ -613,12 +927,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setTransfers(prev =>
       prev.map(t => (t.id === id ? { ...t, status: 'revoked' } : t))
     );
+    try {
+      fetch(apiUrl(`/api/transfers/${encodeURIComponent(id)}/revoke`), { method: 'POST' }).catch(() => {});
+    } catch {}
   };
 
   const recordDownload = (id: string) => {
     setTransfers(prev =>
       prev.map(t => (t.id === id ? { ...t, downloadsCount: t.downloadsCount + 1 } : t))
     );
+    try {
+      fetch(apiUrl(`/api/transfers/${encodeURIComponent(id)}/download`), { method: 'POST' }).catch(() => {});
+    } catch {}
   };
 
   const addTransferReview = (id: string, review: Omit<ClientReview, 'id' | 'createdAt'>) => {
@@ -632,6 +952,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         t.id === id ? { ...t, reviews: [newRev, ...(t.reviews || [])] } : t
       )
     );
+    try {
+      fetch(apiUrl(`/api/transfers/${encodeURIComponent(id)}/review`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(review),
+      }).catch(() => {});
+    } catch {}
   };
 
   // Friends & Chat operations
@@ -661,12 +988,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     // If still not found, query backend server to see if user was recently registered
     if (!targetUser) {
       try {
-        const checkRes = await fetch(`/api/users/${encodeURIComponent(cleanTo)}`);
+        const checkRes = await fetch(apiUrl(`/api/users/${encodeURIComponent(cleanTo)}`));
         if (checkRes.ok) {
           const sUser = await checkRes.json();
           if (sUser && sUser.username) {
             targetUser = sUser;
-            setUsers(prev => [...prev, sUser]);
+            setUsers(prev => [...prev.filter(u => u.username.toLowerCase() !== sUser.username.toLowerCase()), sUser]);
           }
         }
       } catch {}
@@ -695,7 +1022,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     // Send to backend server
     try {
-      const res = await fetch('/api/friend-requests', {
+      const res = await fetch(apiUrl('/api/friend-requests'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fromUsername: currentUser.username, toUsername: targetUser.username }),
@@ -718,9 +1045,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const cancelFriendRequestAction = (requestId: string) => {
-    // Send to backend server
     try {
-      fetch(`/api/friend-requests/${requestId}/cancel`, { method: 'POST' }).catch(() => {});
+      fetch(apiUrl(`/api/friend-requests/${encodeURIComponent(requestId)}/cancel`), { method: 'POST' }).catch(() => {});
     } catch {}
 
     setFriendRequests(prev => prev.filter(r => r.id !== requestId));
@@ -730,17 +1056,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const req = friendRequests.find(r => r.id === requestId);
     if (!req || !currentUser) return;
 
-    // Send to backend server
     try {
-      fetch(`/api/friend-requests/${requestId}/accept`, { method: 'POST' }).catch(() => {});
+      fetch(apiUrl(`/api/friend-requests/${encodeURIComponent(requestId)}/accept`), { method: 'POST' }).catch(() => {});
     } catch {}
 
-    // Update request locally
     setFriendRequests(prev =>
       prev.map(r => (r.id === requestId ? { ...r, status: 'accepted' } : r))
     );
 
-    // Add friend mutually
     const friendName = req.fromUsername.toLowerCase() === currentUser.username.toLowerCase()
       ? req.toUsername
       : req.fromUsername;
@@ -765,9 +1088,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const declineFriendRequestAction = (requestId: string) => {
-    // Send to server
     try {
-      fetch(`/api/friend-requests/${requestId}/decline`, { method: 'POST' }).catch(() => {});
+      fetch(apiUrl(`/api/friend-requests/${encodeURIComponent(requestId)}/decline`), { method: 'POST' }).catch(() => {});
     } catch {}
 
     setFriendRequests(prev =>
@@ -784,9 +1106,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const msg = createChatMessage(currentUser.username, recipientUsername, text, attachment);
     setChatMessages(prev => [...prev.filter(m => m.id !== msg.id), msg]);
 
-    // Send to server
     try {
-      fetch('/api/chat-messages', {
+      fetch(apiUrl('/api/chat-messages'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -805,6 +1126,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     try {
       const pkg = createPublishedPackage(input);
       setPublishedPackages(prev => [pkg, ...prev]);
+
+      try {
+        fetch(apiUrl('/api/published'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(pkg),
+        }).catch(() => {});
+      } catch {}
+
       return { success: true, package: pkg };
     } catch (err: any) {
       return { success: false, error: err.message || 'Failed to publish files' };
@@ -815,6 +1145,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setPublishedPackages(prev =>
       prev.map(p => (p.id === id ? { ...p, downloadsCount: p.downloadsCount + 1 } : p))
     );
+    try {
+      fetch(apiUrl(`/api/published/${encodeURIComponent(id)}/download`), { method: 'POST' }).catch(() => {});
+    } catch {}
   };
 
   const togglePublishedLikeAction = (id: string) => {
@@ -826,6 +1159,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return updatedPackage;
       })
     );
+    try {
+      fetch(apiUrl(`/api/published/${encodeURIComponent(id)}/like`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username }),
+      }).catch(() => {});
+    } catch {}
   };
 
   return (
@@ -860,6 +1200,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         signIn,
         signOut,
         switchUserQuick,
+        searchAccountsGlobally,
+        isAvatarModalOpen,
+        setIsAvatarModalOpen,
+        updateUserAvatar,
         createProject,
         updateProject,
         deleteProject,

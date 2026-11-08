@@ -20,6 +20,7 @@ import {
   Image as ImageIcon,
   FolderDown,
   X,
+  Sun,
 } from 'lucide-react';
 import { TransferFile, ChatAttachment } from '../types';
 import JSZip from 'jszip';
@@ -42,7 +43,10 @@ export const FriendsMessenger: React.FC = () => {
     setAuthModal,
     setLightboxPhoto,
     theme,
+    toggleTheme,
+    searchAccountsGlobally,
   } = useApp();
+
 
   const [addFriendInput, setAddFriendInput] = useState('');
   const [requestFeedback, setRequestFeedback] = useState<{ success: boolean; message: string } | null>(null);
@@ -590,7 +594,33 @@ export const FriendsMessenger: React.FC = () => {
                 ))}
             </div>
           </div>
+
+          {/* Left Sidebar Footer: Dusk Mode with v1.28 immediately next to it */}
+          <div
+            className={`p-3 border-t flex items-center justify-between font-mono-code text-xs transition-colors ${
+              isLight ? 'border-amber-200 bg-amber-50/70' : 'border-orange-500/15 bg-[#100805]'
+            }`}
+          >
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 transition-all cursor-pointer ${
+                isLight
+                  ? 'border-amber-300 bg-white text-stone-800 hover:bg-amber-100 shadow-sm'
+                  : 'border-orange-500/30 bg-[#1e110c] text-orange-200 hover:border-orange-400'
+              }`}
+              title="Toggle Dusk Mode"
+            >
+              <Sun className="h-3.5 w-3.5 text-amber-400" />
+              <span className="font-semibold text-xs">Dusk Mode</span>
+              <span className="font-mono-code text-[11px] font-bold text-[#ff6b00] px-1.5 py-0.5 rounded bg-orange-500/15 border border-orange-500/30">
+                v1.28
+              </span>
+            </button>
+            <span className="text-[10px] opacity-60 font-mono-code">Noir Vault</span>
+          </div>
         </div>
+
 
         {/* Right: Live Chat with Active Friend (8 cols) */}
         <div className="lg:col-span-8 flex flex-col justify-between h-[550px]">

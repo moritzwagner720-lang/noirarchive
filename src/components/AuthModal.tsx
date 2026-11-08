@@ -67,12 +67,12 @@ export const AuthModal: React.FC = () => {
 
   if (!authModal) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
 
     if (mode === 'signup') {
-      const res = signUp({
+      const res = await signUp({
         username: username.trim(),
         password,
         location: location.trim() || undefined,
@@ -86,7 +86,7 @@ export const AuthModal: React.FC = () => {
         setFormError(res.error || 'Failed to create account.');
       }
     } else {
-      const res = signIn(username.trim(), password);
+      const res = await signIn(username.trim(), password);
 
       if (res.success) {
         setAuthModal(null);

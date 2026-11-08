@@ -66,12 +66,12 @@ export const AuthGate: React.FC = () => {
     }
   }, [password, mode]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
 
     if (mode === 'signup') {
-      const res = signUp({
+      const res = await signUp({
         username: username.trim(),
         password,
         location: location.trim() || undefined,
@@ -82,7 +82,7 @@ export const AuthGate: React.FC = () => {
         setFormError(res.error || 'Failed to create account.');
       }
     } else {
-      const res = signIn(username.trim(), password);
+      const res = await signIn(username.trim(), password);
       if (!res.success) {
         setFormError(res.error || 'Invalid username or password.');
       }
@@ -123,7 +123,7 @@ export const AuthGate: React.FC = () => {
           <div className="flex items-center gap-3">
             <button
               onClick={toggleTheme}
-              className={`flex items-center gap-2 rounded-full border px-3 py-1.5 font-mono-code text-xs transition-colors ${
+              className={`flex items-center gap-2 rounded-full border px-3 py-1.5 font-mono-code text-xs transition-colors cursor-pointer ${
                 isLight
                   ? 'border-amber-300 bg-amber-50 text-stone-700 hover:bg-amber-100'
                   : 'border-orange-500/30 bg-[#160d09] text-orange-200 hover:bg-[#1e110c]'
@@ -138,6 +138,9 @@ export const AuthGate: React.FC = () => {
                 <>
                   <Sun className="h-3.5 w-3.5 text-amber-400" />
                   <span>Dusk Mode</span>
+                  <span className="font-mono-code text-[11px] font-bold text-[#ff6b00] px-1.5 py-0.5 rounded bg-orange-500/15 border border-orange-500/30">
+                    v1.28
+                  </span>
                 </>
               )}
             </button>

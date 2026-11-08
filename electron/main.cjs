@@ -151,6 +151,39 @@ ipcMain.handle('get-app-paths', () => {
   };
 });
 
+const backendConfigFile = path.join(appUserData, 'backend-config.json');
+
+function getStoredBackendUrl() {
+  if (process.env.NOIR_BACKEND_URL) {
+    return process.env.NOIR_BACKEND_URL.trim();
+  }
+  try {
+    if (fs.existsSync(backendConfigFile)) {
+      const cfg = JSON.parse(fs.readFileSync(backendConfigFile, 'utf-8'));
+      if (cfg.backendUrl) return cfg.backendUrl.trim();
+    }
+  } catch {
+    // ignore
+  }
+  return '';
+}
+
+function saveStoredBackendUrl(url) {
+  try {
+    fs.writeFileSync(backendConfigFile, JSON.stringify({ backendUrl: url || '' }, null, 2), 'utf-8');
+  } catch {
+    // ignore
+  }
+}
+
+ipcMain.on('get-backend-url', (event) => {
+  event.returnValue = getStoredBackendUrl();
+});
+
+ipcMain.on('set-backend-url', (_event, url) => {
+  saveStoredBackendUrl(url);
+});
+
 // App Lifecycle
 app.on('second-instance', () => {
   if (mainWindow) {

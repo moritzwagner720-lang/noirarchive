@@ -19,6 +19,8 @@ import { AuthModal } from './components/AuthModal';
 import { SendTransferModal } from './components/SendTransferModal';
 import { TransferPortalView } from './components/TransferPortalView';
 import { AuthGate } from './components/AuthGate';
+import { DesktopTitlebar } from './components/DesktopTitlebar';
+import { SwitchAvatarModal } from './components/SwitchAvatarModal';
 import {
   Camera,
   Send,
@@ -53,7 +55,12 @@ const AppContent: React.FC = () => {
 
   // Strict Login Gate: The user must log in before they can do anything in the app
   if (!currentUser) {
-    return <AuthGate />;
+    return (
+      <div className="flex flex-col min-h-screen">
+        <DesktopTitlebar />
+        <AuthGate />
+      </div>
+    );
   }
 
   // If a direct transfer link is accessed (e.g. ?transfer=TR-4912)
@@ -64,14 +71,17 @@ const AppContent: React.FC = () => {
           isLight ? 'bg-[#fcf8f5] text-stone-900' : 'bg-[#090503] text-white'
         }`}
       >
+        <DesktopTitlebar />
         <Navbar />
         <TransferPortalView transferId={activeTransferPortalId} />
         <LightboxModal />
         <AuthModal />
         <PublishModal />
+        <SwitchAvatarModal />
       </div>
     );
   }
+
 
   // Filter photos by search query if any
   const displayedPhotos = searchQuery.trim()
@@ -94,6 +104,7 @@ const AppContent: React.FC = () => {
       }`}
     >
       <div>
+        <DesktopTitlebar />
         <Navbar />
 
         {/* Start Page (Explore / Home view) */}
@@ -216,6 +227,7 @@ const AppContent: React.FC = () => {
       <AuthModal />
       <SendTransferModal />
       <PublishModal />
+      <SwitchAvatarModal />
     </div>
   );
 };

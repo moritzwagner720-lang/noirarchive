@@ -10,10 +10,12 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
+    "test": "tsx --test src/utils/*.test.ts",
     "build:win": "vite build && electron-builder --win nsis --config electron-builder.json"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
+    "@supabase/supabase-js": "^2.119.0",
     "@tailwindcss/vite": "^4.3.3",
     "@types/jszip": "^3.4.0",
     "@vitejs/plugin-react": "^6.1.1",

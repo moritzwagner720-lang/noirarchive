@@ -154,15 +154,67 @@ function createDesktopServer({ dataDir, distDir }) {
 
   let store = loadStore();
 
+  // CORS for cross-origin local and remote requests
+  app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+    if (req.method === 'OPTIONS') {
+      return res.sendStatus(200);
+    }
+    next();
+  });
+
   app.use(express.json({ limit: '100mb' }));
+
+  // SSE Event Stream for live desktop sync
+  const sseClients = new Set();
+  function broadcast(type, data) {
+    const payload = `event: ${type}\ndata: ${JSON.stringify(data)}\n\n`;
+    for (const client of sseClients) {
+      try {
+        client.write(payload);
+      } catch {
+        sseClients.delete(client);
+      }
+    }
+  }
+
+  app.get('/api/events', (req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders?.();
+    res.write(`event: connected\ndata: ${JSON.stringify({ timestamp: Date.now() })}\n\n`);
+    sseClients.add(res);
+    req.on('close', () => {
+      sseClients.delete(res);
+    });
+  });
 
   // --- API ROUTES ---
   app.get('/api/users', (_req, res) => {
     res.json(store.users.map(sanitizeUser));
   });
 
+  app.get('/api/users/search/:query', (req, res) => {
+    const query = req.params.query.toLowerCase().trim();
+    if (!query) {
+      return res.json(store.users.map(sanitizeUser));
+    }
+    const matches = store.users
+      .filter(
+        u =>
+          u.username.toLowerCase().includes(query) ||
+          (u.bio && u.bio.toLowerCase().includes(query)) ||
+          (u.location && u.location.toLowerCase().includes(query))
+      )
+      .map(sanitizeUser);
+    res.json(matches);
+  });
+
   app.get('/api/users/:username', (req, res) => {
-    const username = req.params.username.replace(/^@/, '').toLowerCase();
+    const username = req.params.username.replace(/^@/, '').toLowerCase().trim();
     const user = store.users.find(u => u.username.toLowerCase() === username);
     if (!user) {
       return res.status(404).json({ error: `User @${req.params.username} not found` });
@@ -435,6 +487,35 @@ function createDesktopServer({ dataDir, distDir }) {
       saveStore(store);
     }
     res.json({ success: true });
+  });
+
+  app.post('/api/transfers/:id/revoke', (req, res) => {
+    const { id } = req.params;
+    const t = store.transfers.find(item => item.id === id);
+    if (t) {
+      t.status = 'revoked';
+      saveStore(store);
+    }
+    res.json({ success: true });
+  });
+
+  app.post('/api/transfers/:id/review', (req, res) => {
+    const { id } = req.params;
+    const { author, rating, comment } = req.body;
+    const t = store.transfers.find(item => item.id === id);
+    if (!t) {
+      return res.status(404).json({ error: 'Transfer not found' });
+    }
+    const newRev = {
+      id: `rev-${Date.now()}`,
+      author: author || 'Client',
+      rating: Number(rating) || 5,
+      comment: comment || '',
+      createdAt: new Date().toISOString(),
+    };
+    t.reviews = [newRev, ...(t.reviews || [])];
+    saveStore(store);
+    res.json({ success: true, review: newRev });
   });
 
   app.get('/api/published', (_req, res) => {

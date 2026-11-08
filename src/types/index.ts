@@ -138,3 +138,25 @@ export interface PublishedPackage {
   likedBy?: string[];
   createdAt: string;
 }
+
+export interface NoirDesktopBridge {
+  isDesktop: boolean;
+  platform: string;
+  version: string;
+  minimize: () => void;
+  maximize: () => void;
+  close: () => void;
+  isMaximized: () => Promise<boolean>;
+  openExternal: (url: string) => void;
+  showItemInFolder: (fullPath: string) => void;
+  getAppPaths: () => Promise<{ userData: string; appPath: string; version: string }>;
+  getBackendUrl?: () => string;
+  setBackendUrl?: (url: string) => void;
+}
+
+declare global {
+  interface Window {
+    noirDesktop?: NoirDesktopBridge;
+    NOIR_API_URL?: string;
+  }
+}

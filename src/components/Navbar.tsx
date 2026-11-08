@@ -17,6 +17,7 @@ import {
   MessageSquare,
   Globe,
   Upload,
+  Palette,
 } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
@@ -36,9 +37,11 @@ export const Navbar: React.FC = () => {
     switchUserQuick,
     setIsTransferModalOpen,
     setIsPublishModalOpen,
+    setIsAvatarModalOpen,
     friendRequests,
     publishedPackages,
   } = useApp();
+
 
   const [showUserDropdown, setShowUserDropdown] = useState(false);
 
@@ -339,6 +342,25 @@ export const Navbar: React.FC = () => {
                       </span>
                       <ArrowRight className="h-3 w-3" />
                     </button>
+
+                    <button
+                      onClick={() => {
+                        setIsAvatarModalOpen(true);
+                        setShowUserDropdown(false);
+                      }}
+                      className={`flex w-full items-center justify-between py-1.5 px-2 rounded-lg text-xs font-semibold transition-colors ${
+                        isLight
+                          ? 'text-stone-700 hover:text-stone-950 hover:bg-amber-50'
+                          : 'text-neutral-300 hover:text-white hover:bg-orange-500/10'
+                      }`}
+                    >
+                      <span className="flex items-center gap-2">
+                        <Palette className="h-3.5 w-3.5 text-blue-500" />
+                        Switch Profile Picture
+                      </span>
+                      <ArrowRight className="h-3 w-3" />
+                    </button>
+
 
                     <button
                       onClick={() => {
