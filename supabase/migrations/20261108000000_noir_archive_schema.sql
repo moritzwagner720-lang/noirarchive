@@ -1,11 +1,17 @@
 -- ========================================================================
--- NOIR ARCHIVE — Supabase PostgreSQL Schema & Migration
--- Project Reference: dvhnfngbwebpsygxyiul
+-- NOIR ARCHIVE — Production Supabase PostgreSQL Schema & Migration
+-- Safe for execution on fresh or existing Supabase projects.
+-- Idempotent: Does NOT drop existing tables or delete existing user data.
 -- ========================================================================
 
+-- Enable UUID extension if needed
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- 1. USERS TABLE
+-- ========================================================================
+-- 1. TABLES DEFINITION (IDEMPOTENT)
+-- ========================================================================
+
+-- 1.1 USERS TABLE
 CREATE TABLE IF NOT EXISTS public.users (
   id TEXT PRIMARY KEY,
   username TEXT UNIQUE NOT NULL,
@@ -21,7 +27,7 @@ CREATE TABLE IF NOT EXISTS public.users (
 CREATE INDEX IF NOT EXISTS idx_users_username_lower ON public.users (LOWER(username));
 CREATE INDEX IF NOT EXISTS idx_users_location ON public.users (LOWER(location));
 
--- 2. FRIEND REQUESTS TABLE
+-- 1.2 FRIEND REQUESTS TABLE
 CREATE TABLE IF NOT EXISTS public.friend_requests (
   id TEXT PRIMARY KEY,
   from_username TEXT NOT NULL REFERENCES public.users(username) ON UPDATE CASCADE ON DELETE CASCADE,
@@ -34,7 +40,7 @@ CREATE INDEX IF NOT EXISTS idx_friend_requests_from ON public.friend_requests (L
 CREATE INDEX IF NOT EXISTS idx_friend_requests_to ON public.friend_requests (LOWER(to_username));
 CREATE INDEX IF NOT EXISTS idx_friend_requests_status ON public.friend_requests (status);
 
--- 3. CHAT MESSAGES TABLE
+-- 1.3 CHAT MESSAGES TABLE
 CREATE TABLE IF NOT EXISTS public.chat_messages (
   id TEXT PRIMARY KEY,
   sender_username TEXT NOT NULL REFERENCES public.users(username) ON UPDATE CASCADE ON DELETE CASCADE,
@@ -47,7 +53,7 @@ CREATE TABLE IF NOT EXISTS public.chat_messages (
 CREATE INDEX IF NOT EXISTS idx_chat_messages_conversation 
   ON public.chat_messages (LOWER(sender_username), LOWER(recipient_username), created_at ASC);
 
--- 4. TRANSFERS TABLE
+-- 1.4 TRANSFERS TABLE (Client Delivery Packages)
 CREATE TABLE IF NOT EXISTS public.transfers (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
@@ -67,7 +73,7 @@ CREATE INDEX IF NOT EXISTS idx_transfers_sender ON public.transfers (LOWER(sende
 CREATE INDEX IF NOT EXISTS idx_transfers_recipient ON public.transfers (LOWER(recipient_username));
 CREATE INDEX IF NOT EXISTS idx_transfers_status ON public.transfers (status);
 
--- 5. PUBLISHED PACKAGES TABLE
+-- 1.5 PUBLISHED PACKAGES TABLE (Community Showcase)
 CREATE TABLE IF NOT EXISTS public.published_packages (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
@@ -85,14 +91,26 @@ CREATE TABLE IF NOT EXISTS public.published_packages (
 
 CREATE INDEX IF NOT EXISTS idx_published_created ON public.published_packages (created_at DESC);
 
--- RLS
-ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.friend_requests ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.chat_messages ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.transfers ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.published_packages ENABLE ROW LEVEL SECURITY;
+-- ========================================================================
+-- 2. ROW LEVEL SECURITY (RLS) & ACCESS CONTROL
+-- ========================================================================
 
--- Service role policies
+ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.users FORCE ROW LEVEL SECURITY;
+
+ALTER TABLE public.friend_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.friend_requests FORCE ROW LEVEL SECURITY;
+
+ALTER TABLE public.chat_messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.chat_messages FORCE ROW LEVEL SECURITY;
+
+ALTER TABLE public.transfers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.transfers FORCE ROW LEVEL SECURITY;
+
+ALTER TABLE public.published_packages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.published_packages FORCE ROW LEVEL SECURITY;
+
+-- 2.1 Service Role Policies (Full Backend Access)
 DROP POLICY IF EXISTS "Service role full access on users" ON public.users;
 CREATE POLICY "Service role full access on users" ON public.users
   FOR ALL TO service_role USING (true) WITH CHECK (true);
@@ -113,28 +131,57 @@ DROP POLICY IF EXISTS "Service role full access on published_packages" ON public
 CREATE POLICY "Service role full access on published_packages" ON public.published_packages
   FOR ALL TO service_role USING (true) WITH CHECK (true);
 
--- Public read policies
-DROP POLICY IF EXISTS "Public can view usernames and profiles" ON public.users;
-CREATE POLICY "Public can view usernames and profiles" ON public.users
-  FOR SELECT TO anon, authenticated USING (true);
+-- 2.2 Direct Client Access Restrictions
+REVOKE ALL ON TABLE public.users FROM anon, authenticated;
+REVOKE ALL ON TABLE public.friend_requests FROM anon, authenticated;
+REVOKE ALL ON TABLE public.chat_messages FROM anon, authenticated;
 
+GRANT ALL ON TABLE public.users TO service_role;
+GRANT ALL ON TABLE public.friend_requests TO service_role;
+GRANT ALL ON TABLE public.chat_messages TO service_role;
+GRANT ALL ON TABLE public.transfers TO service_role;
+GRANT ALL ON TABLE public.published_packages TO service_role;
+
+-- 2.3 Public Showcase & Transfers Access Rules
 DROP POLICY IF EXISTS "Public can view published showcase packages" ON public.published_packages;
 CREATE POLICY "Public can view published showcase packages" ON public.published_packages
   FOR SELECT TO anon, authenticated USING (true);
+
+REVOKE INSERT, UPDATE, DELETE ON TABLE public.published_packages FROM anon, authenticated;
+GRANT SELECT ON TABLE public.published_packages TO anon, authenticated;
 
 DROP POLICY IF EXISTS "Public can view active transfers by ID" ON public.transfers;
 CREATE POLICY "Public can view active transfers by ID" ON public.transfers
   FOR SELECT TO anon, authenticated USING (status = 'active');
 
--- Seed existing users
-INSERT INTO public.users (id, username, bio, avatar, location, password_hash, friends, created_at)
-VALUES 
-  ('user-moritz', 'moritz', 'Architectural and minimalist street photography. Exploring geometric tension, concrete textures, and natural contrast.', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80', 'Berlin', 'hash_53ab39b7_11', ARRAY['elena_k', 'kenji_mono'], '2024-01-15T10:00:00.000Z'),
-  ('user-elena', 'elena_k', 'Monochrome portraiture, sculptural fashion, and darkroom chiaroscuro.', 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=400&q=80', 'Paris', 'hash_2c1542db_9', ARRAY['moritz'], '2024-02-01T12:00:00.000Z'),
-  ('user-kenji', 'kenji_mono', 'Nocturnal street observer. Capturing midnight rain, subway shadows, and solitary moments across Tokyo.', 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80', 'Tokyo', 'hash_49b28bb5_7', ARRAY['moritz'], '2024-03-10T09:30:00.000Z'),
-  ('user-daddy', 'daddy', 'Visual artist and photographer.', 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=400&q=80', 'Berlin', 'hash_53ab39b7_11', ARRAY[]::TEXT[], '2024-04-01T09:30:00.000Z')
-ON CONFLICT (username) DO NOTHING;
+REVOKE INSERT, UPDATE, DELETE ON TABLE public.transfers FROM anon, authenticated;
+GRANT SELECT ON TABLE public.transfers TO anon, authenticated;
 
-INSERT INTO public.chat_messages (id, sender_username, recipient_username, text, created_at)
-VALUES ('msg-1794061673032-30', 'moritz', 'daddy', 'Hey daddy, real-time messaging is now working instantly!', '2026-11-07T14:27:53.032Z')
-ON CONFLICT (id) DO NOTHING;
+-- ========================================================================
+-- 3. PUBLIC USERS VIEW (SAFE & PRIVATE)
+-- ========================================================================
+DROP VIEW IF EXISTS public.public_users RESTRICT;
+
+CREATE VIEW public.public_users 
+WITH (security_barrier = true) AS
+SELECT
+  id,
+  username,
+  bio,
+  avatar,
+  location,
+  created_at
+FROM public.users;
+
+ALTER VIEW public.public_users OWNER TO postgres;
+
+REVOKE ALL ON TABLE public.public_users FROM PUBLIC;
+GRANT SELECT ON TABLE public.public_users TO anon, authenticated;
+GRANT ALL ON TABLE public.public_users TO service_role;
+
+-- ========================================================================
+-- 4. PRODUCTION SEEDING NOTE
+-- ========================================================================
+-- Demo user accounts and test chat messages with legacy password hashes
+-- have been removed for production security.
+-- ========================================================================
