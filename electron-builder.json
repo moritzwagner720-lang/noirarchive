@@ -1,0 +1,51 @@
+{
+  "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
+  "appId": "com.noirarchive.app",
+  "productName": "Noir Archive",
+  "copyright": "Copyright © 2026 Noir Archive",
+  "directories": {
+    "output": "dist-electron",
+    "buildResources": "build"
+  },
+  "files": [
+    "dist/**/*",
+    "electron/**/*",
+    "build/icon.ico",
+    "build/icon.png",
+    "server-storage.json",
+    "package.json"
+  ],
+  "extraResources": [
+    {
+      "from": "server-storage.json",
+      "to": "server-storage.json"
+    }
+  ],
+  "win": {
+    "target": [
+      {
+        "target": "nsis",
+        "arch": [
+          "x64"
+        ]
+      }
+    ],
+    "icon": "build/icon.ico",
+    "artifactName": "Setup.exe",
+    "requestedExecutionLevel": "asInvoker"
+  },
+  "nsis": {
+    "oneClick": false,
+    "perMachine": false,
+    "allowToChangeInstallationDirectory": true,
+    "allowElevation": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "Noir Archive",
+    "installerIcon": "build/icon.ico",
+    "uninstallerIcon": "build/icon.ico",
+    "deleteAppDataOnUninstall": false,
+    "runAfterFinish": true,
+    "warningsAsErrors": false
+  }
+}

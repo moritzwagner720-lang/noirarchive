@@ -1,0 +1,63 @@
+{
+  "users": [
+    {
+      "id": "user-moritz",
+      "username": "moritz",
+      "bio": "Architectural and minimalist street photography. Exploring geometric tension, concrete textures, and natural contrast.",
+      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
+      "location": "Berlin",
+      "passwordHash": "hash_53ab39b7_11",
+      "createdAt": "2024-01-15T10:00:00.000Z",
+      "friends": [
+        "elena_k",
+        "kenji_mono"
+      ]
+    },
+    {
+      "id": "user-elena",
+      "username": "elena_k",
+      "bio": "Monochrome portraiture, sculptural fashion, and darkroom chiaroscuro.",
+      "avatar": "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=400&q=80",
+      "location": "Paris",
+      "passwordHash": "hash_2c1542db_9",
+      "createdAt": "2024-02-01T12:00:00.000Z",
+      "friends": [
+        "moritz"
+      ]
+    },
+    {
+      "id": "user-kenji",
+      "username": "kenji_mono",
+      "bio": "Nocturnal street observer. Capturing midnight rain, subway shadows, and solitary moments across Tokyo.",
+      "avatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80",
+      "location": "Tokyo",
+      "passwordHash": "hash_49b28bb5_7",
+      "createdAt": "2024-03-10T09:30:00.000Z",
+      "friends": [
+        "moritz"
+      ]
+    },
+    {
+      "id": "user-daddy",
+      "username": "daddy",
+      "bio": "Visual artist and photographer.",
+      "avatar": "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=400&q=80",
+      "location": "Berlin",
+      "passwordHash": "hash_53ab39b7_11",
+      "createdAt": "2024-04-01T09:30:00.000Z",
+      "friends": []
+    }
+  ],
+  "friendRequests": [],
+  "chatMessages": [
+    {
+      "id": "msg-1794061673032-30",
+      "senderUsername": "moritz",
+      "recipientUsername": "daddy",
+      "text": "Hey daddy, real-time messaging is now working instantly!",
+      "createdAt": "2026-11-07T14:27:53.032Z"
+    }
+  ],
+  "transfers": [],
+  "publishedPackages": []
+}
