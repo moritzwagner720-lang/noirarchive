@@ -26,6 +26,13 @@
       "favoritePackageIds": [],
       "activeSessions": [
         {
+          "id": "sess_1794256843767_b1fe14ae",
+          "client": "Chrome",
+          "ip": "127.0.0.1",
+          "lastActive": "Just now",
+          "current": true
+        },
+        {
           "id": "sess_1794254230132_01146356",
           "client": "Chrome",
           "ip": "127.0.0.1",
@@ -135,5 +142,31 @@
   "transfers": [],
   "publishedPackages": [],
   "reports": [],
-  "sessions": []
+  "sessions": [
+    {
+      "id": "sess_1794256843767_b1fe14ae",
+      "token": "fc7902e63af29ed629c75c25e700f810cbb6e646174463141fa10135cbedcc35",
+      "userId": "user-moritz",
+      "username": "moritz",
+      "createdAt": "2026-11-09T20:40:43.767Z",
+      "expiresAt": "2026-12-09T20:40:43.767Z",
+      "lastActive": "2026-11-09T20:40:43.767Z",
+      "client": "Chrome",
+      "ip": "127.0.0.1"
+    }
+  ],
+  "files": [
+    {
+      "id": "file_1794256765922_13948a31442e8ec5",
+      "name": "test_archive.bin",
+      "size": "12 B",
+      "sizeBytes": 12,
+      "type": "application/octet-stream",
+      "relativePath": "documents/test_archive.bin",
+      "folderPath": "documents",
+      "filePath": "/app/applet/uploads/file_1794256765922_13948a31442e8ec5_test_archive.bin",
+      "uploadedAt": "2026-11-09T20:39:25.978Z",
+      "uploaderUsername": "moritz"
+    }
+  ]
 }

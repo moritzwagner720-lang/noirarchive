@@ -17,7 +17,21 @@ import {
   Layers,
   AlertCircle,
   Users,
+  FolderTree,
+  Pause,
+  Play,
+  XCircle,
 } from 'lucide-react';
+import { ChunkedFileUploader, UploadProgressInfo, extractFilesWithFolderPaths } from '../utils/chunkedUploader';
+import { formatBytes } from '../utils/transfer';
+
+interface StagedModalFile {
+  file: File;
+  relativePath: string;
+  id: string;
+  sizeFormatted: string;
+  sizeBytes: number;
+}
 
 export const SendTransferModal: React.FC = () => {
   const {
@@ -38,7 +52,8 @@ export const SendTransferModal: React.FC = () => {
   // Form State
   const [transferTitle, setTransferTitle] = useState('File Delivery Package');
   const [transferNote, setTransferNote] = useState('');
-  const [uploadedFiles, setUploadedFiles] = useState<TransferFile[]>([]);
+  const [stagedFiles, setStagedFiles] = useState<StagedModalFile[]>([]);
+  const [dragActive, setDragActive] = useState(false);
 
   // Recipient destination: 'direct-link' | 'friend' | 'group'
   const [recipientType, setRecipientType] = useState<'direct-link' | 'friend' | 'group'>('direct-link');
@@ -50,6 +65,12 @@ export const SendTransferModal: React.FC = () => {
   const [password, setPassword] = useState('');
   const [expiryDays, setExpiryDays] = useState<number | null>(14);
   const [error, setError] = useState<string | null>(null);
+
+  // Chunked Upload Progress State
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<UploadProgressInfo | null>(null);
+  const [currentUploader, setCurrentUploader] = useState<ChunkedFileUploader | null>(null);
+  const [isPaused, setIsPaused] = useState(false);
 
   useEffect(() => {
     if (isTransferModalOpen && step !== 'success') {
@@ -65,35 +86,68 @@ export const SendTransferModal: React.FC = () => {
 
   if (!isTransferModalOpen || !currentUser) return null;
 
-  // File upload handler
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files) return;
-
-    Array.from(files).forEach((file, idx) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const url = reader.result as string;
-        const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
-        const newFile: TransferFile = {
-          id: `up-${Date.now()}-${idx}`,
-          name: file.name,
-          url,
-          size: `${sizeMb} MB`,
-          type: file.type || 'application/octet-stream',
-          folderPath: file.webkitRelativePath ? file.webkitRelativePath.split('/')[0] : 'Assets',
-        };
-        setUploadedFiles(prev => [...prev, newFile]);
-      };
-      reader.readAsDataURL(file);
-    });
+  const addFiles = (items: { file: File; relativePath: string }[]) => {
+    const newItems: StagedModalFile[] = items.map((item, idx) => ({
+      file: item.file,
+      relativePath: item.relativePath,
+      id: `staged-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 6)}`,
+      sizeFormatted: formatBytes(item.file.size),
+      sizeBytes: item.file.size,
+    }));
+    setStagedFiles(prev => [...prev, ...newItems]);
   };
 
-  const handleSend = (e: React.FormEvent) => {
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    const items = Array.from(files).map(f => ({
+      file: f,
+      relativePath: f.webkitRelativePath || f.name,
+    }));
+    addFiles(items);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    if (e.dataTransfer) {
+      const items = await extractFilesWithFolderPaths(e.dataTransfer);
+      if (items.length > 0) addFiles(items);
+    }
+  };
+
+  const handlePauseResume = () => {
+    if (!currentUploader) return;
+    if (isPaused) {
+      setIsPaused(false);
+      currentUploader.start().catch(err => {
+        if (!err.message?.includes('paused')) {
+          setError(err.message);
+        }
+      });
+    } else {
+      setIsPaused(true);
+      currentUploader.pause();
+    }
+  };
+
+  const handleCancelUpload = () => {
+    if (currentUploader) {
+      currentUploader.cancel();
+      setCurrentUploader(null);
+    }
+    setIsUploading(false);
+    setIsPaused(false);
+    setUploadProgress(null);
+    setError('Upload cancelled.');
+  };
+
+  const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
-    if (uploadedFiles.length === 0) {
+    if (stagedFiles.length === 0) {
       setError('Please add at least one file or folder to transfer.');
       return;
     }
@@ -113,29 +167,65 @@ export const SendTransferModal: React.FC = () => {
       return;
     }
 
-    const selectedGroup = groups.find(g => g.id === recipientGroupId);
+    setIsUploading(true);
+    setIsPaused(false);
 
-    const res = sendTransfer({
-      senderId: currentUser.id,
-      senderUsername: currentUser.username,
-      title: transferTitle.trim(),
-      note: transferNote.trim() || undefined,
-      recipientType: recipientType === 'group' ? 'group' : recipientType === 'friend' ? 'username' : 'direct-link',
-      recipientUsername: recipientType === 'friend' ? recipientUsername : undefined,
-      recipientGroupId: recipientType === 'group' ? recipientGroupId : undefined,
-      recipientGroupName: recipientType === 'group' ? selectedGroup?.name : undefined,
-      password: hasPassword && password ? password : undefined,
-      expiryDays,
-      files: uploadedFiles,
-    });
+    try {
+      const uploadedFiles: TransferFile[] = [];
 
-    if (res.success && res.packageId) {
-      setCreatedPackageId(res.packageId);
-      setStep('success');
-    } else {
-      setError(res.error || 'Failed to dispatch transfer.');
+      for (let i = 0; i < stagedFiles.length; i++) {
+        const item = stagedFiles[i];
+        const uploader = new ChunkedFileUploader(item.file, item.relativePath, (info) => {
+          setUploadProgress({
+            ...info,
+            fileIndex: i + 1,
+            totalFiles: stagedFiles.length,
+          });
+        });
+        setCurrentUploader(uploader);
+
+        const uploaded = await uploader.start();
+        uploadedFiles.push(uploaded);
+      }
+
+      setCurrentUploader(null);
+
+      const selectedGroup = groups.find(g => g.id === recipientGroupId);
+
+      const res = sendTransfer({
+        senderId: currentUser.id,
+        senderUsername: currentUser.username,
+        title: transferTitle.trim(),
+        note: transferNote.trim() || undefined,
+        recipientType: recipientType === 'group' ? 'group' : recipientType === 'friend' ? 'username' : 'direct-link',
+        recipientUsername: recipientType === 'friend' ? recipientUsername : undefined,
+        recipientGroupId: recipientType === 'group' ? recipientGroupId : undefined,
+        recipientGroupName: recipientType === 'group' ? selectedGroup?.name : undefined,
+        password: hasPassword && password ? password : undefined,
+        expiryDays,
+        files: uploadedFiles,
+      });
+
+      if (res.success && res.packageId) {
+        setCreatedPackageId(res.packageId);
+        setStagedFiles([]);
+        setStep('success');
+      } else {
+        setError(res.error || 'Failed to dispatch transfer.');
+      }
+    } catch (err: any) {
+      console.error('Send transfer error:', err);
+      if (!err.message?.includes('cancelled') && !err.message?.includes('paused')) {
+        setError(err.message || 'Failed to upload files for transfer.');
+      }
+    } finally {
+      setIsUploading(false);
+      setCurrentUploader(null);
     }
   };
+
+  const totalBytes = stagedFiles.reduce((acc, f) => acc + f.sizeBytes, 0);
+  const totalSize = formatBytes(totalBytes);
 
   const transferLink = createdPackageId
     ? `${window.location.origin}${window.location.pathname}?transfer=${createdPackageId}`
@@ -151,10 +241,10 @@ export const SendTransferModal: React.FC = () => {
     setIsTransferModalOpen(false);
     setStep('configure');
     setCreatedPackageId(null);
-    setUploadedFiles([]);
+    setStagedFiles([]);
+    setIsUploading(false);
+    setUploadProgress(null);
   };
-
-  const totalSize = uploadedFiles.reduce((acc, f) => acc + (parseFloat(f.size) || 1), 0).toFixed(1);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-md animate-in fade-in">
@@ -180,7 +270,7 @@ export const SendTransferModal: React.FC = () => {
                 Send Files / Folders
               </h2>
               <p className="mt-1 text-xs text-neutral-400">
-                Package directories or files for instant delivery to friends, custom groups, or via shareable link.
+                Package directories or multi-gigabyte files for instant delivery without artificial size limits.
               </p>
             </div>
 
@@ -201,6 +291,7 @@ export const SendTransferModal: React.FC = () => {
                   <input
                     type="text"
                     required
+                    disabled={isUploading}
                     value={transferTitle}
                     onChange={e => setTransferTitle(e.target.value)}
                     className="w-full rounded-xl border border-[#383a40] bg-[#1e1f22] py-2 px-3 text-xs text-white focus:outline-none focus:border-[var(--color-accent)]"
@@ -214,6 +305,7 @@ export const SendTransferModal: React.FC = () => {
                   <input
                     type="text"
                     placeholder="Optional message..."
+                    disabled={isUploading}
                     value={transferNote}
                     onChange={e => setTransferNote(e.target.value)}
                     className="w-full rounded-xl border border-[#383a40] bg-[#1e1f22] py-2 px-3 text-xs text-white focus:outline-none focus:border-[var(--color-accent)]"
@@ -224,10 +316,20 @@ export const SendTransferModal: React.FC = () => {
               {/* File / Folder Upload Area */}
               <div>
                 <label className="block font-mono-code text-[11px] uppercase tracking-wider text-neutral-300 font-bold mb-1.5">
-                  Package Contents ({uploadedFiles.length} files • {totalSize} MB)
+                  Package Contents ({stagedFiles.length} files • {totalSize})
                 </label>
 
-                <div className="flex flex-col items-center justify-center border-2 border-dashed border-[#383a40] bg-[#1e1f22] rounded-2xl p-6 text-center hover:border-neutral-500 transition-colors">
+                <div
+                  onDragEnter={(e) => { e.preventDefault(); setDragActive(true); }}
+                  onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
+                  onDragLeave={(e) => { e.preventDefault(); setDragActive(false); }}
+                  onDrop={handleDrop}
+                  className={`flex flex-col items-center justify-center border-2 border-dashed rounded-2xl p-6 text-center transition-colors ${
+                    dragActive
+                      ? 'border-[var(--color-accent)] bg-[#5865f2]/10'
+                      : 'border-[#383a40] bg-[#1e1f22] hover:border-neutral-500'
+                  }`}
+                >
                   <div
                     className="h-10 w-10 rounded-xl flex items-center justify-center text-white mb-2 shadow-sm"
                     style={{ backgroundColor: 'var(--color-accent, #5865f2)' }}
@@ -235,20 +337,20 @@ export const SendTransferModal: React.FC = () => {
                     <Upload className="h-5 w-5" />
                   </div>
                   <p className="text-xs font-bold text-white">
-                    Select files or an entire folder directory
+                    Select files or drag & drop an entire folder directory
                   </p>
                   <p className="text-[11px] text-neutral-400 mt-0.5">
-                    Any format: archives (.zip, .tar), documents (.pdf), raw assets, software bundles
+                    Multi-gigabyte archives, media bundles, and deep folders supported via streaming
                   </p>
 
                   <div className="mt-3 flex gap-3">
-                    <label className="flex items-center gap-1.5 rounded-xl border border-[#383a40] bg-[#2b2d31] hover:bg-[#313338] px-3.5 py-1.5 text-xs font-semibold cursor-pointer transition-colors shadow-sm">
+                    <label className={`flex items-center gap-1.5 rounded-xl border border-[#383a40] bg-[#2b2d31] hover:bg-[#313338] px-3.5 py-1.5 text-xs font-semibold cursor-pointer transition-colors shadow-sm ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}>
                       <File className="h-3.5 w-3.5" style={{ color: 'var(--color-accent)' }} />
                       <span>Add Files</span>
-                      <input type="file" multiple onChange={handleFileUpload} className="hidden" />
+                      <input type="file" multiple disabled={isUploading} onChange={handleFileUpload} className="hidden" />
                     </label>
 
-                    <label className="flex items-center gap-1.5 rounded-xl border border-[#383a40] bg-[#2b2d31] hover:bg-[#313338] px-3.5 py-1.5 text-xs font-semibold cursor-pointer transition-colors shadow-sm">
+                    <label className={`flex items-center gap-1.5 rounded-xl border border-[#383a40] bg-[#2b2d31] hover:bg-[#313338] px-3.5 py-1.5 text-xs font-semibold cursor-pointer transition-colors shadow-sm ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}>
                       <Folder className="h-3.5 w-3.5" style={{ color: 'var(--color-accent)' }} />
                       <span>Add Full Folder</span>
                       {/* @ts-ignore */}
@@ -258,6 +360,7 @@ export const SendTransferModal: React.FC = () => {
                         webkitdirectory=""
                         directory=""
                         multiple
+                        disabled={isUploading}
                         onChange={handleFileUpload}
                         className="hidden"
                       />
@@ -265,14 +368,88 @@ export const SendTransferModal: React.FC = () => {
                   </div>
                 </div>
 
-                {uploadedFiles.length > 0 && (
-                  <div className="mt-2 max-h-32 overflow-y-auto space-y-1 rounded-xl border border-[#383a40] bg-[#1e1f22] p-2">
-                    {uploadedFiles.map(f => (
+                {/* Staged file list preview */}
+                {stagedFiles.length > 0 && (
+                  <div className="mt-2 max-h-36 overflow-y-auto space-y-1 rounded-xl border border-[#383a40] bg-[#1e1f22] p-2">
+                    {stagedFiles.map((f, idx) => (
                       <div key={f.id} className="flex items-center justify-between font-mono-code text-[11px] p-1.5 rounded-lg bg-[#2b2d31] text-neutral-300">
-                        <span className="truncate max-w-[320px]">{f.name}</span>
-                        <span className="text-neutral-500">{f.size}</span>
+                        <div className="flex items-center gap-1.5 truncate max-w-[380px]">
+                          {f.relativePath.includes('/') ? (
+                            <FolderTree className="h-3 w-3 text-indigo-400 shrink-0" />
+                          ) : (
+                            <File className="h-3 w-3 text-neutral-400 shrink-0" />
+                          )}
+                          <span className="truncate text-white" title={f.relativePath}>{f.relativePath}</span>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="text-neutral-500">{f.sizeFormatted}</span>
+                          {!isUploading && (
+                            <button
+                              type="button"
+                              onClick={() => setStagedFiles(prev => prev.filter((_, i) => i !== idx))}
+                              className="text-neutral-500 hover:text-rose-400"
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </div>
                       </div>
                     ))}
+                  </div>
+                )}
+
+                {/* Live chunk upload progress bar in modal */}
+                {isUploading && uploadProgress && (
+                  <div className="mt-3 rounded-xl border border-[#383a40] bg-[#1e1f22] p-3 space-y-2">
+                    <div className="flex items-center justify-between text-xs font-mono-code">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Upload className="h-3 w-3 animate-bounce text-indigo-400 shrink-0" />
+                        <span className="text-white truncate font-semibold max-w-[200px]" title={uploadProgress.fileName}>
+                          {uploadProgress.fileName}
+                        </span>
+                        <span className="text-[10px] text-neutral-400 shrink-0">
+                          ({uploadProgress.fileIndex}/{uploadProgress.totalFiles})
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-emerald-400 font-bold text-[11px]">{uploadProgress.speedFormatted}</span>
+                        <span className="text-white font-bold">{uploadProgress.percent}%</span>
+                      </div>
+                    </div>
+
+                    <div className="w-full h-1.5 rounded-full bg-[#2b2d31] overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all duration-200"
+                        style={{
+                          width: `${uploadProgress.percent}%`,
+                          backgroundColor: 'var(--color-accent, #5865f2)',
+                        }}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between text-[10px] font-mono-code text-neutral-400">
+                      <span>
+                        {formatBytes(uploadProgress.loadedBytes)} / {formatBytes(uploadProgress.totalBytes)}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={handlePauseResume}
+                          className="flex items-center gap-1 px-2 py-0.5 rounded bg-[#2b2d31] hover:bg-[#313338] text-neutral-200 hover:text-white border border-[#383a40]"
+                        >
+                          {isPaused ? <Play className="h-2.5 w-2.5 text-emerald-400" /> : <Pause className="h-2.5 w-2.5 text-amber-400" />}
+                          <span>{isPaused ? 'Resume' : 'Pause'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleCancelUpload}
+                          className="flex items-center gap-1 px-2 py-0.5 rounded bg-[#2b2d31] hover:bg-rose-500/20 text-neutral-400 hover:text-rose-400 border border-[#383a40]"
+                        >
+                          <XCircle className="h-2.5 w-2.5" />
+                          <span>Cancel</span>
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>

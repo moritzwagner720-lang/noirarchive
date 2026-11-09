@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { THEMES } from '../utils/themes';
-import { ThemeId, GroupPrivacySetting } from '../types';
+import { ThemeId, GroupPrivacySetting, StorageQuotaInfo } from '../types';
+import { calculateUserTotalStorageStats } from '../utils/transfer';
 import { UserAvatar } from './UserAvatar';
 import {
   Palette,
@@ -28,6 +29,11 @@ import {
   Laptop,
   Globe,
   Trash2,
+  Server,
+  RefreshCw,
+  Cpu,
+  Database,
+  Info,
 } from 'lucide-react';
 
 export const SettingsView: React.FC = () => {
@@ -46,6 +52,7 @@ export const SettingsView: React.FC = () => {
     signOut,
     groups,
     transfers,
+    publishedPackages,
     activeSessions,
     refreshSessionsAction,
     revokeSessionAction,
@@ -143,12 +150,38 @@ export const SettingsView: React.FC = () => {
     }
   };
 
-  // Storage Stats calculation
-  const totalUserFiles = transfers
-    .filter(t => t.senderId === currentUser.id)
-    .reduce((acc, t) => acc + (t.files?.length || 0), 0);
+  // Dynamic Live Storage Stats & Provider Infrastructure Info
+  const [storageInfo, setStorageInfo] = useState<StorageQuotaInfo | null>(null);
+  const [isLoadingStorage, setIsLoadingStorage] = useState(false);
+  const [showProviderSpecs, setShowProviderSpecs] = useState(false);
 
-  const totalUserTransfers = transfers.filter(t => t.senderId === currentUser.id).length;
+  useEffect(() => {
+    if (!currentUser?.username) return;
+    let isMounted = true;
+    const fetchStorageInfo = async () => {
+      try {
+        setIsLoadingStorage(true);
+        const res = await fetch(`/api/storage/info?username=${encodeURIComponent(currentUser.username)}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (isMounted) setStorageInfo(data);
+        }
+      } catch (e) {
+        console.warn('Failed to load storage info from API:', e);
+      } finally {
+        if (isMounted) setIsLoadingStorage(false);
+      }
+    };
+    fetchStorageInfo();
+    return () => { isMounted = false; };
+  }, [currentUser?.username, transfers.length, publishedPackages?.length]);
+
+  // Reactive accurate byte-level calculation across all user transfers & community vault packages
+  const userStorageStats = calculateUserTotalStorageStats(
+    currentUser?.username || '',
+    transfers,
+    publishedPackages || []
+  );
 
   const standardThemes = THEMES.filter(t => t.type === 'standard');
   const seasonalThemes = THEMES.filter(t => t.type === 'seasonal');
@@ -737,45 +770,120 @@ export const SettingsView: React.FC = () => {
 
               {/* Storage Usage Overview */}
               <div className="rounded-2xl border border-[#383a40] bg-[#2b2d31] p-6 space-y-4 shadow-sm">
-                <div className="border-b border-[#383a40] pb-3">
-                  <div className="flex items-center gap-2">
-                    <HardDrive className="h-4 w-4 text-emerald-400" />
-                    <h3 className="font-sans text-sm font-bold text-white">
-                      Storage Usage & Quota
-                    </h3>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-[#383a40] pb-3 gap-2">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <HardDrive className="h-4 w-4 text-emerald-400" />
+                      <h3 className="font-sans text-sm font-bold text-white flex items-center gap-2">
+                        Storage Usage & Capacity
+                        <span className="text-[10px] font-mono-code px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                          No 10 GB Artificial Limit
+                        </span>
+                      </h3>
+                    </div>
+                    <p className="text-xs text-neutral-400 mt-0.5">
+                      Direct streaming disk storage on the Noir Archive network with chunked multi-file transfers.
+                    </p>
                   </div>
-                  <p className="text-xs text-neutral-400 mt-0.5">
-                    High-speed disk space allocated to your account on the Noir Archive network.
-                  </p>
+                  <button
+                    onClick={() => setShowProviderSpecs(prev => !prev)}
+                    className="inline-flex items-center gap-1.5 self-start sm:self-auto text-xs font-mono-code text-neutral-400 hover:text-white transition-colors px-2.5 py-1 rounded-lg bg-[#232428] border border-[#383a40]"
+                  >
+                    <Info className="h-3.5 w-3.5 text-indigo-400" />
+                    <span>{showProviderSpecs ? 'Hide Provider Specs' : 'Provider Specs & Limits'}</span>
+                  </button>
                 </div>
 
                 <div className="space-y-3 font-mono-code text-xs">
-                  <div className="flex items-center justify-between text-neutral-300">
-                    <span>Used Space: <strong className="text-white">{(totalUserFiles * 12.4).toFixed(1)} MB</strong> / 10.0 GB</span>
-                    <span className="text-[11px] text-emerald-400">{(totalUserFiles * 0.12).toFixed(1)}% Quota</span>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between text-neutral-300 gap-1">
+                    <div className="flex items-center gap-2">
+                      <span>Used Space: <strong className="text-white text-sm font-bold">{userStorageStats.totalFormatted}</strong></span>
+                      <span className="text-[11px] text-neutral-500">
+                        ({userStorageStats.totalBytes.toLocaleString()} bytes)
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] text-emerald-400 font-medium">Dynamic Stream Storage</span>
+                      <span className="text-neutral-500">•</span>
+                      <span className="text-[11px] text-neutral-400">Chunked Resumable</span>
+                    </div>
                   </div>
 
-                  {/* Progress bar */}
+                  {/* Dynamic capacity bar based on current utilization */}
                   <div className="w-full h-2 rounded-full bg-[#1e1f22] overflow-hidden">
                     <div
-                      className="h-full rounded-full transition-all"
+                      className="h-full rounded-full transition-all duration-500"
                       style={{
-                        width: `${Math.min(100, Math.max(3, totalUserFiles * 0.5))}%`,
+                        width: `${Math.min(100, Math.max(2, (userStorageStats.totalBytes / (50 * 1024 * 1024 * 1024)) * 100))}%`,
                         backgroundColor: 'var(--color-accent, #5865f2)',
                       }}
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3 pt-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-2">
                     <div className="p-3 rounded-xl bg-[#232428] border border-[#383a40]">
                       <span className="block text-[10px] text-neutral-400 uppercase">Active Dispatches</span>
-                      <span className="text-white font-bold text-sm">{totalUserTransfers} transfers</span>
+                      <span className="text-white font-bold text-sm">{userStorageStats.totalTransfers} transfers</span>
                     </div>
                     <div className="p-3 rounded-xl bg-[#232428] border border-[#383a40]">
                       <span className="block text-[10px] text-neutral-400 uppercase">Stored Files & Assets</span>
-                      <span className="text-white font-bold text-sm">{totalUserFiles} files</span>
+                      <span className="text-white font-bold text-sm">{userStorageStats.totalFiles} files</span>
+                    </div>
+                    <div className="p-3 rounded-xl bg-[#232428] border border-[#383a40] col-span-2 sm:col-span-1">
+                      <span className="block text-[10px] text-neutral-400 uppercase">Per-Transfer Limit</span>
+                      <span className="text-emerald-400 font-bold text-sm">Flexible Streaming</span>
                     </div>
                   </div>
+
+                  {/* Provider Transparency Breakdown */}
+                  {showProviderSpecs && (
+                    <div className="mt-4 p-4 rounded-xl bg-[#1e1f22] border border-[#383a40] space-y-3 text-xs text-neutral-300 animate-in fade-in">
+                      <div className="flex items-center justify-between border-b border-[#2b2d31] pb-2">
+                        <span className="font-bold text-white flex items-center gap-1.5">
+                          <Server className="h-3.5 w-3.5 text-indigo-400" />
+                          Storage Provider & Infrastructure Reality
+                        </span>
+                        <span className="text-[10px] text-neutral-400">Live Status</span>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-[11px]">
+                        <div className="p-2.5 rounded-lg bg-[#2b2d31]/60 border border-[#383a40]/60 space-y-1">
+                          <div className="flex items-center gap-1 text-white font-semibold">
+                            <Cpu className="h-3 w-3 text-amber-400" />
+                            <span>Hosting: Render Container</span>
+                          </div>
+                          <p className="text-neutral-400 text-[10px]">
+                            • RAM: 512 MB Free Web Service container.
+                          </p>
+                          <p className="text-neutral-400 text-[10px]">
+                            • Zero-RAM streaming: files are sliced into 5 MB chunks so multi-GB uploads never trigger Linux OOM termination.
+                          </p>
+                          <p className="text-neutral-400 text-[10px]">
+                            • Request timeout: 100s per chunk request.
+                          </p>
+                        </div>
+
+                        <div className="p-2.5 rounded-lg bg-[#2b2d31]/60 border border-[#383a40]/60 space-y-1">
+                          <div className="flex items-center gap-1 text-white font-semibold">
+                            <Database className="h-3 w-3 text-sky-400" />
+                            <span>Database: Supabase</span>
+                          </div>
+                          <p className="text-neutral-400 text-[10px]">
+                            • Project Ref: <code className="text-sky-300">dvhnfngbwebpsygxyiul</code>
+                          </p>
+                          <p className="text-neutral-400 text-[10px]">
+                            • Free Tier: 500 MB database size, 1 GB S3 storage (50 GB on Pro).
+                          </p>
+                          <p className="text-neutral-400 text-[10px]">
+                            • PostgREST JSON body limit: ~6 MB (large files stream to chunk disk, not DB text columns).
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="text-[10px] text-neutral-400 bg-[#232428] p-2.5 rounded-lg border border-[#383a40]">
+                        <strong className="text-emerald-400">Code Audit Verdict:</strong> The previous fixed "10.0 GB" was an artificial client mock limitation. Transfers now stream directly to disk with HTTP Range byte support for fast, resumable downloads without arbitrary file size caps.
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 

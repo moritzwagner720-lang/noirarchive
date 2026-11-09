@@ -17,8 +17,23 @@ import {
   Lock,
   Archive,
   Download,
+  Pause,
+  Play,
+  XCircle,
+  AlertTriangle,
+  FolderTree,
 } from 'lucide-react';
 import { TransferFile } from '../types';
+import { ChunkedFileUploader, UploadProgressInfo, extractFilesWithFolderPaths } from '../utils/chunkedUploader';
+import { formatBytes } from '../utils/transfer';
+
+interface StagedFileItem {
+  file: File;
+  relativePath: string;
+  id: string;
+  sizeFormatted: string;
+  sizeBytes: number;
+}
 
 export const HeroTransferSection: React.FC = () => {
   const {
@@ -32,7 +47,7 @@ export const HeroTransferSection: React.FC = () => {
   } = useApp();
 
   const [dragActive, setDragActive] = useState(false);
-  const [stagedFiles, setStagedFiles] = useState<TransferFile[]>([]);
+  const [stagedFiles, setStagedFiles] = useState<StagedFileItem[]>([]);
   const [transferTitle, setTransferTitle] = useState('Archive Delivery Package');
   const [destinationChoice, setDestinationChoice] = useState<'link' | 'friend' | 'group' | 'publish'>('link');
   const [targetUsername, setTargetUsername] = useState('');
@@ -42,6 +57,13 @@ export const HeroTransferSection: React.FC = () => {
   const [createdTransferId, setCreatedTransferId] = useState<string | null>(null);
   const [publishedSuccessId, setPublishedSuccessId] = useState<string | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
+
+  // Upload Progress & Streaming State
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<UploadProgressInfo | null>(null);
+  const [currentUploader, setCurrentUploader] = useState<ChunkedFileUploader | null>(null);
+  const [isPaused, setIsPaused] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   // Drag & drop handlers
   const handleDrag = (e: React.DragEvent) => {
@@ -54,44 +76,66 @@ export const HeroTransferSection: React.FC = () => {
     }
   };
 
-  const handleDrop = (e: React.DragEvent) => {
+  const addStagedItems = (items: { file: File; relativePath: string }[]) => {
+    const newItems: StagedFileItem[] = items.map((item, idx) => ({
+      file: item.file,
+      relativePath: item.relativePath,
+      id: `staged-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 6)}`,
+      sizeFormatted: formatBytes(item.file.size),
+      sizeBytes: item.file.size,
+    }));
+    setStagedFiles(prev => [...prev, ...newItems]);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      processFiles(e.dataTransfer.files);
+    if (e.dataTransfer) {
+      const items = await extractFilesWithFolderPaths(e.dataTransfer);
+      if (items.length > 0) {
+        addStagedItems(items);
+      }
     }
   };
 
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      processFiles(e.target.files);
+      const items = Array.from(e.target.files).map(f => ({
+        file: f,
+        relativePath: f.webkitRelativePath || f.name,
+      }));
+      addStagedItems(items);
     }
   };
 
-  const processFiles = (fileList: FileList) => {
-    Array.from(fileList).forEach((file, idx) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const url = reader.result as string;
-        const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
-        setStagedFiles(prev => [
-          ...prev,
-          {
-            id: `fast-${Date.now()}-${idx}`,
-            name: file.name,
-            url,
-            size: `${sizeMb} MB`,
-            type: file.type || 'application/octet-stream',
-            folderPath: file.webkitRelativePath ? file.webkitRelativePath.split('/')[0] : 'Root',
-          },
-        ]);
-      };
-      reader.readAsDataURL(file);
-    });
+  const handlePauseResume = () => {
+    if (!currentUploader) return;
+    if (isPaused) {
+      setIsPaused(false);
+      currentUploader.start().catch(err => {
+        if (!err.message?.includes('paused')) {
+          setUploadError(err.message);
+        }
+      });
+    } else {
+      setIsPaused(true);
+      currentUploader.pause();
+    }
   };
 
-  const handleActionSubmit = (e: React.FormEvent) => {
+  const handleCancelUpload = () => {
+    if (currentUploader) {
+      currentUploader.cancel();
+      setCurrentUploader(null);
+    }
+    setIsUploading(false);
+    setIsPaused(false);
+    setUploadProgress(null);
+    setUploadError('Upload cancelled.');
+  };
+
+  const handleActionSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUser) return;
 
@@ -100,40 +144,77 @@ export const HeroTransferSection: React.FC = () => {
       return;
     }
 
-    if (destinationChoice === 'publish') {
-      const res = publishPackageAction({
-        title: transferTitle,
-        description: 'Uploaded to the shared public vault for direct download.',
-        authorUsername: currentUser.username,
-        authorAvatar: '',
-        category: 'bundles',
-        files: stagedFiles,
-      });
+    setIsUploading(true);
+    setUploadError(null);
+    setIsPaused(false);
 
-      if (res.success && res.package) {
-        setPublishedSuccessId(res.package.id);
-        setStagedFiles([]);
+    try {
+      const uploadedFiles: TransferFile[] = [];
+
+      for (let i = 0; i < stagedFiles.length; i++) {
+        const item = stagedFiles[i];
+        const uploader = new ChunkedFileUploader(item.file, item.relativePath, (info) => {
+          setUploadProgress({
+            ...info,
+            fileIndex: i + 1,
+            totalFiles: stagedFiles.length,
+          });
+        });
+        setCurrentUploader(uploader);
+
+        const uploaded = await uploader.start();
+        uploadedFiles.push(uploaded);
       }
-    } else {
-      const selectedGroup = groups.find(g => g.id === targetGroupId);
 
-      const res = sendTransfer({
-        senderId: currentUser.id,
-        senderUsername: currentUser.username,
-        title: transferTitle,
-        recipientType: destinationChoice === 'group' ? 'group' : destinationChoice === 'friend' ? 'username' : 'direct-link',
-        recipientUsername: destinationChoice === 'friend' ? targetUsername || currentUser.friends?.[0] : undefined,
-        recipientGroupId: destinationChoice === 'group' ? targetGroupId : undefined,
-        recipientGroupName: destinationChoice === 'group' ? selectedGroup?.name : undefined,
-        password: hasPassword && password ? password : undefined,
-        expiryDays: 14,
-        files: stagedFiles,
-      });
+      setCurrentUploader(null);
 
-      if (res.success && res.packageId) {
-        setCreatedTransferId(res.packageId);
-        setStagedFiles([]);
+      if (destinationChoice === 'publish') {
+        const res = publishPackageAction({
+          title: transferTitle,
+          description: 'Uploaded to the shared public vault for direct download.',
+          authorUsername: currentUser.username,
+          authorAvatar: '',
+          category: 'bundles',
+          files: uploadedFiles,
+        });
+
+        if (res.success && res.package) {
+          setPublishedSuccessId(res.package.id);
+          setStagedFiles([]);
+        } else {
+          setUploadError(res.error || 'Failed to publish package');
+        }
+      } else {
+        const selectedGroup = groups.find(g => g.id === targetGroupId);
+
+        const res = sendTransfer({
+          senderId: currentUser.id,
+          senderUsername: currentUser.username,
+          title: transferTitle,
+          recipientType: destinationChoice === 'group' ? 'group' : destinationChoice === 'friend' ? 'username' : 'direct-link',
+          recipientUsername: destinationChoice === 'friend' ? targetUsername || currentUser.friends?.[0] : undefined,
+          recipientGroupId: destinationChoice === 'group' ? targetGroupId : undefined,
+          recipientGroupName: destinationChoice === 'group' ? selectedGroup?.name : undefined,
+          password: hasPassword && password ? password : undefined,
+          expiryDays: 14,
+          files: uploadedFiles,
+        });
+
+        if (res.success && res.packageId) {
+          setCreatedTransferId(res.packageId);
+          setStagedFiles([]);
+        } else {
+          setUploadError(res.error || 'Failed to create transfer');
+        }
       }
+    } catch (err: any) {
+      console.error('Transfer upload failed:', err);
+      if (!err.message?.includes('cancelled') && !err.message?.includes('paused')) {
+        setUploadError(err.message || 'Transfer failed');
+      }
+    } finally {
+      setIsUploading(false);
+      setCurrentUploader(null);
     }
   };
 
@@ -144,7 +225,8 @@ export const HeroTransferSection: React.FC = () => {
     setTimeout(() => setCopiedLink(false), 2500);
   };
 
-  const totalStagedSize = stagedFiles.reduce((acc, f) => acc + (parseFloat(f.size) || 1), 0).toFixed(1);
+  const totalStagedBytes = stagedFiles.reduce((acc, f) => acc + f.sizeBytes, 0);
+  const totalStagedSize = formatBytes(totalStagedBytes);
 
   return (
     <div className="relative overflow-hidden bg-transparent text-neutral-100">
@@ -322,29 +404,68 @@ export const HeroTransferSection: React.FC = () => {
                     Instant staging for single assets, multi-file batches, or entire directories
                   </p>
 
-                  {/* Staged counter */}
+                  {/* Staged counter & folder preview list */}
                   {stagedFiles.length > 0 && (
-                    <div className="mt-3 flex items-center gap-2 rounded-lg bg-[#313338] border border-[#383a40] px-3 py-1 font-mono-code text-xs font-semibold text-white">
-                      <span>✓ {stagedFiles.length} files staged ({totalStagedSize} MB)</span>
-                      <button
-                        type="button"
-                        onClick={() => setStagedFiles([])}
-                        className="text-neutral-400 hover:text-rose-400 ml-2"
-                      >
-                        Clear
-                      </button>
+                    <div className="mt-3 w-full max-w-lg space-y-2">
+                      <div className="flex items-center justify-between rounded-lg bg-[#313338] border border-[#383a40] px-3 py-1.5 font-mono-code text-xs font-semibold text-white">
+                        <span className="flex items-center gap-1.5">
+                          <Check className="h-3.5 w-3.5 text-emerald-400" />
+                          {stagedFiles.length} file{stagedFiles.length > 1 ? 's' : ''} staged ({totalStagedSize})
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setStagedFiles([])}
+                          disabled={isUploading}
+                          className="text-neutral-400 hover:text-rose-400 transition-colors"
+                        >
+                          Clear All
+                        </button>
+                      </div>
+
+                      {/* Scrollable file list showing folder hierarchy */}
+                      <div className="max-h-36 overflow-y-auto space-y-1 pr-1 font-mono-code text-[11px]">
+                        {stagedFiles.map((sf, idx) => (
+                          <div
+                            key={sf.id}
+                            className="flex items-center justify-between rounded-lg bg-[#232428] border border-[#383a40]/70 px-2.5 py-1 text-neutral-300"
+                          >
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              {sf.relativePath.includes('/') ? (
+                                <FolderTree className="h-3 w-3 text-indigo-400 shrink-0" />
+                              ) : (
+                                <File className="h-3 w-3 text-neutral-400 shrink-0" />
+                              )}
+                              <span className="truncate text-white" title={sf.relativePath}>
+                                {sf.relativePath}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0 ml-2">
+                              <span className="text-[10px] text-neutral-400">{sf.sizeFormatted}</span>
+                              {!isUploading && (
+                                <button
+                                  type="button"
+                                  onClick={() => setStagedFiles(prev => prev.filter((_, i) => i !== idx))}
+                                  className="text-neutral-500 hover:text-rose-400"
+                                >
+                                  ✕
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
 
                   {/* Buttons to select files or full directory */}
                   <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
-                    <label className="rounded-xl border border-[#383a40] bg-[#2b2d31] hover:bg-[#313338] px-4 py-2 text-xs font-semibold cursor-pointer text-white transition-colors shadow-sm flex items-center gap-2">
+                    <label className={`rounded-xl border border-[#383a40] bg-[#2b2d31] hover:bg-[#313338] px-4 py-2 text-xs font-semibold cursor-pointer text-white transition-colors shadow-sm flex items-center gap-2 ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}>
                       <File className="h-4 w-4" style={{ color: 'var(--color-accent)' }} />
                       <span>Select Files</span>
-                      <input type="file" multiple onChange={handleFileInput} className="hidden" />
+                      <input type="file" multiple disabled={isUploading} onChange={handleFileInput} className="hidden" />
                     </label>
 
-                    <label className="rounded-xl border border-[#383a40] bg-[#2b2d31] hover:bg-[#313338] px-4 py-2 text-xs font-semibold cursor-pointer text-white transition-colors shadow-sm flex items-center gap-2">
+                    <label className={`rounded-xl border border-[#383a40] bg-[#2b2d31] hover:bg-[#313338] px-4 py-2 text-xs font-semibold cursor-pointer text-white transition-colors shadow-sm flex items-center gap-2 ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}>
                       <Folder className="h-4 w-4" style={{ color: 'var(--color-accent)' }} />
                       <span>Select Full Folder</span>
                       {/* @ts-ignore */}
@@ -354,11 +475,78 @@ export const HeroTransferSection: React.FC = () => {
                         webkitdirectory=""
                         directory=""
                         multiple
+                        disabled={isUploading}
                         onChange={handleFileInput}
                         className="hidden"
                       />
                     </label>
                   </div>
+
+                  {/* Live Upload Progress, Speed, Pause/Resume & Error Banner */}
+                  {isUploading && uploadProgress && (
+                    <div className="mt-4 w-full max-w-lg rounded-xl border border-[#383a40] bg-[#232428] p-4 space-y-2.5 text-left animate-in fade-in">
+                      <div className="flex items-center justify-between text-xs font-mono-code">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Upload className="h-3.5 w-3.5 animate-bounce text-indigo-400 shrink-0" />
+                          <span className="font-bold text-white truncate max-w-[220px]" title={uploadProgress.fileName}>
+                            {uploadProgress.fileName}
+                          </span>
+                          <span className="text-[10px] text-neutral-400 shrink-0">
+                            ({uploadProgress.fileIndex}/{uploadProgress.totalFiles})
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="text-emerald-400 font-bold text-[11px]">{uploadProgress.speedFormatted}</span>
+                          <span className="text-white font-bold">{uploadProgress.percent}%</span>
+                        </div>
+                      </div>
+
+                      {/* Progress Bar */}
+                      <div className="w-full h-2 rounded-full bg-[#1e1f22] overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all duration-200"
+                          style={{
+                            width: `${uploadProgress.percent}%`,
+                            backgroundColor: 'var(--color-accent, #5865f2)',
+                          }}
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between text-[10px] font-mono-code text-neutral-400">
+                        <span>
+                          {formatBytes(uploadProgress.loadedBytes)} / {formatBytes(uploadProgress.totalBytes)}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={handlePauseResume}
+                            className="flex items-center gap-1 px-2 py-0.5 rounded bg-[#313338] hover:bg-[#383a40] text-neutral-200 hover:text-white border border-[#383a40]"
+                          >
+                            {isPaused ? <Play className="h-2.5 w-2.5 text-emerald-400" /> : <Pause className="h-2.5 w-2.5 text-amber-400" />}
+                            <span>{isPaused ? 'Resume' : 'Pause'}</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleCancelUpload}
+                            className="flex items-center gap-1 px-2 py-0.5 rounded bg-[#313338] hover:bg-rose-500/20 text-neutral-400 hover:text-rose-400 border border-[#383a40]"
+                          >
+                            <XCircle className="h-2.5 w-2.5" />
+                            <span>Cancel</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {uploadError && (
+                    <div className="mt-3 w-full max-w-lg p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle className="h-4 w-4 shrink-0 text-rose-400" />
+                        <span>{uploadError}</span>
+                      </div>
+                      <button type="button" onClick={() => setUploadError(null)} className="text-rose-400 hover:text-white">✕</button>
+                    </div>
+                  )}
 
                   <p className="mt-3 text-[11px] font-mono-code text-neutral-400 text-center max-w-lg">
                     <strong className="text-neutral-300">Safety Notice:</strong> Uploaded files and folders are not automatically scanned for viruses or malicious code. Only transfer files from trusted sources. Never upload private keys, passwords, or confidential credentials.

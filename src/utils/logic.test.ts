@@ -240,3 +240,85 @@ test('strict rejection of self friend requests', () => {
   assert.equal(check.error, 'You cannot send a friend request to yourself.');
 });
 
+test('parseFileSizeBytes and formatBytes handle accurate byte math', async () => {
+  const { parseFileSizeBytes, formatBytes } = await import('./transfer');
+
+  assert.equal(parseFileSizeBytes('1024 b'), 1024);
+  assert.equal(parseFileSizeBytes('2 KB'), 2048);
+  assert.equal(parseFileSizeBytes('10 MB'), 10 * 1024 * 1024);
+  assert.equal(parseFileSizeBytes('1.5 GB'), 1.5 * 1024 * 1024 * 1024);
+  assert.equal(parseFileSizeBytes('2 TB'), 2 * 1024 * 1024 * 1024 * 1024);
+
+  assert.equal(formatBytes(0), '0 B');
+  assert.equal(formatBytes(512), '512 B');
+  assert.equal(formatBytes(2048), '2.0 KB');
+  assert.equal(formatBytes(15 * 1024 * 1024), '15.0 MB');
+  assert.equal(formatBytes(4.5 * 1024 * 1024 * 1024), '4.5 GB');
+});
+
+test('calculateUserTotalStorageStats calculates real stored bytes without mock multipliers or 10 GB limit', async () => {
+  const { calculateUserTotalStorageStats } = await import('./transfer');
+
+  const mockTransfers: any[] = [
+    {
+      id: 'TR-1001',
+      senderUsername: 'moritz',
+      files: [
+        { id: 'f1', name: 'large_archive.zip', sizeBytes: 150 * 1024 * 1024, size: '150.0 MB' },
+        { id: 'f2', name: 'photo.raw', sizeBytes: 50 * 1024 * 1024, size: '50.0 MB' },
+      ],
+    },
+    {
+      id: 'TR-1002',
+      senderUsername: 'moritz',
+      files: [
+        { id: 'f3', name: 'video.mp4', sizeBytes: 300 * 1024 * 1024, size: '300.0 MB' },
+      ],
+    },
+    {
+      id: 'TR-1003',
+      senderUsername: 'ansel_adams',
+      files: [
+        { id: 'f4', name: 'yosemite.tiff', sizeBytes: 800 * 1024 * 1024, size: '800.0 MB' },
+      ],
+    },
+  ];
+
+  const mockPublished: any[] = [
+    {
+      id: 'pub-1',
+      authorUsername: 'moritz',
+      files: [
+        { id: 'f5', name: 'bundle_asset.iso', sizeBytes: 500 * 1024 * 1024, size: '500.0 MB' },
+      ],
+    },
+  ];
+
+  const stats = calculateUserTotalStorageStats('moritz', mockTransfers, mockPublished);
+
+  // Total for moritz: 150 + 50 + 300 + 500 = 1000 MB = 1,048,576,000 bytes
+  assert.equal(stats.totalBytes, 1000 * 1024 * 1024);
+  assert.equal(stats.totalFiles, 4);
+  assert.equal(stats.totalTransfers, 2);
+  assert.equal(stats.totalFormatted, '1000 MB');
+
+  // Verify other user is isolated
+  const anselStats = calculateUserTotalStorageStats('ansel_adams', mockTransfers, mockPublished);
+  assert.equal(anselStats.totalBytes, 800 * 1024 * 1024);
+  assert.equal(anselStats.totalFiles, 1);
+  assert.equal(anselStats.totalTransfers, 1);
+});
+
+test('chunk calculation divides multi-gigabyte transfers into discrete 5MB slices', async () => {
+  const { CHUNK_SIZE } = await import('./chunkedUploader');
+  assert.equal(CHUNK_SIZE, 5 * 1024 * 1024);
+
+  // 15 MB file
+  const size15Mb = 15 * 1024 * 1024;
+  assert.equal(Math.ceil(size15Mb / CHUNK_SIZE), 3);
+
+  // 12.5 GB file
+  const size12_5Gb = 12.5 * 1024 * 1024 * 1024;
+  assert.equal(Math.ceil(size12_5Gb / CHUNK_SIZE), 2560);
+});
+

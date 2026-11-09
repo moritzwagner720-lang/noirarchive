@@ -57,6 +57,71 @@ function hashPassword(password: string): string {
   return `hash_${Math.abs(hash).toString(16)}_${password.length}`;
 }
 
+export function formatBytes(bytes: number): string {
+  if (bytes <= 0 || isNaN(bytes)) return '0 B';
+  const k = 1024;
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  const idx = Math.min(i, units.length - 1);
+  const val = bytes / Math.pow(k, idx);
+  return `${val.toFixed(val >= 100 || idx === 0 ? 0 : 1)} ${units[idx]}`;
+}
+
+export function parseBytes(sizeStr: string): number {
+  if (!sizeStr) return 0;
+  const clean = sizeStr.trim().toLowerCase();
+  const match = clean.match(/^([\d.]+)\s*(b|bytes|kb|mb|gb|tb)?$/);
+  if (!match) return 0;
+  const num = parseFloat(match[1]) || 0;
+  const unit = match[2] || 'b';
+  switch (unit) {
+    case 'tb':
+      return num * 1024 * 1024 * 1024 * 1024;
+    case 'gb':
+      return num * 1024 * 1024 * 1024;
+    case 'mb':
+      return num * 1024 * 1024;
+    case 'kb':
+      return num * 1024;
+    default:
+      return num;
+  }
+}
+
+export interface StoredFileRecord {
+  id: string;
+  name: string;
+  size: string;
+  sizeBytes: number;
+  type: string;
+  relativePath?: string;
+  folderPath?: string;
+  filePath: string;
+  uploadedAt: string;
+  uploaderUsername?: string;
+}
+
+const UPLOADS_DIR = path.resolve(__dirname, 'uploads');
+const CHUNKS_DIR = path.resolve(UPLOADS_DIR, '.chunks');
+if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+if (!fs.existsSync(CHUNKS_DIR)) fs.mkdirSync(CHUNKS_DIR, { recursive: true });
+
+interface UploadSession {
+  uploadId: string;
+  fileId: string;
+  fileName: string;
+  fileSize: number;
+  fileType: string;
+  relativePath: string;
+  totalChunks: number;
+  receivedChunks: Set<number>;
+  chunkDir: string;
+  createdAt: number;
+  username?: string;
+}
+
+const activeUploads = new Map<string, UploadSession>();
+
 export interface User {
   id: string;
   username: string;
@@ -105,6 +170,7 @@ interface StoreData {
   groups: FriendGroup[];
   reports?: any[];
   sessions: AuthSession[];
+  files?: StoredFileRecord[];
 }
 
 const DEFAULT_USERS: User[] = [
@@ -370,7 +436,312 @@ async function startServer() {
     next();
   });
 
-  app.use(express.json({ limit: '50mb' }));
+  // Streaming raw binary chunk upload (placed before body parsers to stream directly to disk without RAM buffering)
+  app.put('/api/upload/chunk/:uploadId', (req, res) => {
+    const { uploadId } = req.params;
+    const chunkIndexStr = (req.query.chunkIndex as string) || (req.headers['x-chunk-index'] as string);
+    const chunkIndex = parseInt(chunkIndexStr, 10);
+
+    const session = activeUploads.get(uploadId);
+    if (!session) {
+      return res.status(404).json({ error: 'Upload session not found or expired' });
+    }
+    if (isNaN(chunkIndex) || chunkIndex < 0 || chunkIndex >= session.totalChunks) {
+      return res.status(400).json({ error: `Invalid chunk index: ${chunkIndexStr}` });
+    }
+
+    const chunkFilePath = path.join(session.chunkDir, `chunk_${chunkIndex}`);
+    const writeStream = fs.createWriteStream(chunkFilePath);
+
+    req.pipe(writeStream);
+
+    writeStream.on('finish', () => {
+      session.receivedChunks.add(chunkIndex);
+      res.json({
+        success: true,
+        chunkIndex,
+        receivedChunksCount: session.receivedChunks.size,
+        totalChunks: session.totalChunks,
+      });
+    });
+
+    writeStream.on('error', (err) => {
+      console.error(`Error writing chunk ${chunkIndex} for upload ${uploadId}:`, err);
+      res.status(500).json({ error: 'Failed to write chunk to storage' });
+    });
+
+    req.on('error', (err) => {
+      console.error(`Request error during chunk ${chunkIndex} for upload ${uploadId}:`, err);
+      writeStream.destroy();
+      res.status(500).json({ error: 'Network error during chunk stream' });
+    });
+  });
+
+  app.use(express.json({ limit: '100mb' }));
+
+  // Storage usage and infrastructure information
+  app.get('/api/storage/info', (req, res) => {
+    const username = (req.query.username as string) || '';
+    const cleanUser = username.replace(/^@/, '').toLowerCase().trim();
+
+    let totalStorageBytes = 0;
+    let userStorageBytes = 0;
+    let userFilesCount = 0;
+    let totalFilesCount = 0;
+
+    for (const t of store.transfers || []) {
+      const isOwner = cleanUser && t.senderUsername?.toLowerCase() === cleanUser;
+      for (const f of t.files || []) {
+        const b = f.sizeBytes || parseBytes(f.size);
+        totalStorageBytes += b;
+        totalFilesCount++;
+        if (isOwner) {
+          userStorageBytes += b;
+          userFilesCount++;
+        }
+      }
+    }
+
+    for (const p of store.publishedPackages || []) {
+      const isAuthor = cleanUser && p.authorUsername?.toLowerCase() === cleanUser;
+      for (const f of p.files || []) {
+        const b = f.sizeBytes || parseBytes(f.size);
+        totalStorageBytes += b;
+        totalFilesCount++;
+        if (isAuthor) {
+          userStorageBytes += b;
+          userFilesCount++;
+        }
+      }
+    }
+
+    let diskUsedBytes = 0;
+    try {
+      if (fs.existsSync(UPLOADS_DIR)) {
+        const files = fs.readdirSync(UPLOADS_DIR);
+        for (const file of files) {
+          if (file === '.chunks') continue;
+          const s = fs.statSync(path.join(UPLOADS_DIR, file));
+          if (s.isFile()) diskUsedBytes += s.size;
+        }
+      }
+    } catch {}
+
+    res.json({
+      user: {
+        username: cleanUser,
+        usedBytes: userStorageBytes,
+        usedFormatted: formatBytes(userStorageBytes),
+        filesCount: userFilesCount,
+      },
+      platform: {
+        totalBytes: totalStorageBytes,
+        totalFormatted: formatBytes(totalStorageBytes),
+        totalFilesCount,
+        diskUsedBytes,
+        diskUsedFormatted: formatBytes(diskUsedBytes),
+      },
+      architecture: {
+        system: 'Noir Archive Dynamic Streaming Storage Engine',
+        arbitraryAccountLimit: null, // Hardcoded 10 GB limit completely removed
+        maxSingleTransferBytes: null, // No arbitrary file or transfer limits
+        chunkSize: '5 MB chunked slicing with zero server-RAM buffering',
+        streaming: 'Direct disk streaming with HTTP Range resumable downloads',
+        providers: {
+          backendHosting: {
+            name: 'Render Web Service',
+            memoryLimit: '512 MB Container RAM (Streamed chunk I/O eliminates memory spikes)',
+            requestTimeout: '100s per chunk request',
+            filesystem: 'Local streaming disk with persistent volume support',
+          },
+          database: {
+            name: 'Supabase PostgreSQL',
+            projectRef: SUPABASE_PROJECT_REF,
+            freeTierLimit: '500 MB DB size / 1 GB Object Storage (50 GB Pro)',
+            status: supabaseStatus.connected ? 'Connected' : 'Local Disk Fallback Mode',
+          },
+        },
+      },
+    });
+  });
+
+  // Init chunked upload session
+  app.post('/api/upload/init', (req, res) => {
+    const { fileName, fileSize, fileType, relativePath, totalChunks, username } = req.body;
+    if (!fileName || typeof fileSize !== 'number' || typeof totalChunks !== 'number') {
+      return res.status(400).json({ error: 'Invalid upload init parameters' });
+    }
+    const uploadId = `up_${Date.now()}_${crypto.randomBytes(6).toString('hex')}`;
+    const fileId = `file_${Date.now()}_${crypto.randomBytes(8).toString('hex')}`;
+    const chunkDir = path.join(CHUNKS_DIR, uploadId);
+    if (!fs.existsSync(chunkDir)) {
+      fs.mkdirSync(chunkDir, { recursive: true });
+    }
+
+    const session: UploadSession = {
+      uploadId,
+      fileId,
+      fileName,
+      fileSize,
+      fileType: fileType || 'application/octet-stream',
+      relativePath: relativePath || fileName,
+      totalChunks,
+      receivedChunks: new Set<number>(),
+      chunkDir,
+      createdAt: Date.now(),
+      username: username || 'anonymous',
+    };
+
+    activeUploads.set(uploadId, session);
+
+    res.json({
+      success: true,
+      uploadId,
+      fileId,
+      chunkSize: 5 * 1024 * 1024,
+      totalChunks,
+    });
+  });
+
+  // Check upload status (for pause / resume)
+  app.get('/api/upload/status/:uploadId', (req, res) => {
+    const { uploadId } = req.params;
+    const session = activeUploads.get(uploadId);
+    if (!session) {
+      return res.status(404).json({ error: 'Upload session not found or expired' });
+    }
+    res.json({
+      uploadId,
+      fileId: session.fileId,
+      totalChunks: session.totalChunks,
+      receivedChunks: Array.from(session.receivedChunks).sort((a, b) => a - b),
+      progress: session.receivedChunks.size / session.totalChunks,
+    });
+  });
+
+  // Finalize chunked upload and assemble file
+  app.post('/api/upload/complete/:uploadId', async (req, res) => {
+    const { uploadId } = req.params;
+    const session = activeUploads.get(uploadId);
+    if (!session) {
+      return res.status(404).json({ error: 'Upload session not found or expired' });
+    }
+
+    if (session.receivedChunks.size !== session.totalChunks) {
+      return res.status(400).json({
+        error: `Incomplete upload: received ${session.receivedChunks.size} of ${session.totalChunks} chunks`,
+        receivedChunks: Array.from(session.receivedChunks),
+      });
+    }
+
+    const safeName = session.fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const finalFileName = `${session.fileId}_${safeName}`;
+    const finalFilePath = path.join(UPLOADS_DIR, finalFileName);
+    const writeFinalStream = fs.createWriteStream(finalFilePath);
+
+    try {
+      for (let i = 0; i < session.totalChunks; i++) {
+        const chunkPath = path.join(session.chunkDir, `chunk_${i}`);
+        if (!fs.existsSync(chunkPath)) {
+          throw new Error(`Missing chunk ${i} during assembly`);
+        }
+        await new Promise<void>((resolve, reject) => {
+          const readChunkStream = fs.createReadStream(chunkPath);
+          readChunkStream.pipe(writeFinalStream, { end: false });
+          readChunkStream.on('end', () => resolve());
+          readChunkStream.on('error', reject);
+        });
+      }
+      writeFinalStream.end();
+
+      // Clean up chunk files and directory
+      try {
+        fs.rmSync(session.chunkDir, { recursive: true, force: true });
+      } catch (rmErr) {
+        console.warn('Could not remove chunk dir:', rmErr);
+      }
+
+      const fileRecord: StoredFileRecord = {
+        id: session.fileId,
+        name: session.fileName,
+        size: formatBytes(session.fileSize),
+        sizeBytes: session.fileSize,
+        type: session.fileType,
+        relativePath: session.relativePath,
+        folderPath: session.relativePath.includes('/') ? path.dirname(session.relativePath) : undefined,
+        filePath: finalFilePath,
+        uploadedAt: new Date().toISOString(),
+        uploaderUsername: session.username,
+      };
+
+      store.files = store.files || [];
+      store.files.push(fileRecord);
+      saveStore(store);
+
+      activeUploads.delete(uploadId);
+
+      res.json({
+        success: true,
+        file: {
+          id: fileRecord.id,
+          name: fileRecord.name,
+          size: fileRecord.size,
+          sizeBytes: fileRecord.sizeBytes,
+          type: fileRecord.type,
+          relativePath: fileRecord.relativePath,
+          downloadUrl: `/api/files/download/${fileRecord.id}`,
+        },
+      });
+    } catch (err: any) {
+      console.error('Failed to merge chunks:', err);
+      writeFinalStream.destroy();
+      try {
+        if (fs.existsSync(finalFilePath)) fs.unlinkSync(finalFilePath);
+      } catch {}
+      res.status(500).json({ error: `Failed to finalize file: ${err?.message || 'Merge error'}` });
+    }
+  });
+
+  // Streaming file download with HTTP Range header support (for resumable & large file downloads)
+  app.get('/api/files/download/:fileId', (req, res) => {
+    const { fileId } = req.params;
+    const fileRecord = (store.files || []).find(f => f.id === fileId);
+    if (!fileRecord || !fs.existsSync(fileRecord.filePath)) {
+      return res.status(404).json({ error: 'File not found on storage server' });
+    }
+
+    const stat = fs.statSync(fileRecord.filePath);
+    const fileSize = stat.size;
+    const range = req.headers.range;
+
+    const safeFilename = encodeURIComponent(fileRecord.name);
+    res.setHeader('Content-Type', fileRecord.type || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${safeFilename}`);
+    res.setHeader('Accept-Ranges', 'bytes');
+
+    if (range) {
+      const parts = range.replace(/bytes=/, '').split('-');
+      const start = parseInt(parts[0], 10);
+      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+
+      if (start >= fileSize || end >= fileSize || start > end) {
+        res.status(416).setHeader('Content-Range', `bytes */${fileSize}`);
+        return res.end();
+      }
+
+      const chunksize = end - start + 1;
+      const fileStream = fs.createReadStream(fileRecord.filePath, { start, end });
+      res.writeHead(206, {
+        'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+        'Content-Length': chunksize,
+      });
+      fileStream.pipe(res);
+    } else {
+      res.setHeader('Content-Length', fileSize);
+      const fileStream = fs.createReadStream(fileRecord.filePath);
+      fileStream.pipe(res);
+    }
+  });
 
   // SSE Clients Registry for real-time live synchronization
   const sseClients = new Set<express.Response>();

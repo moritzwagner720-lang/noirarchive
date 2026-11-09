@@ -17,6 +17,17 @@ import {
   Lock,
 } from 'lucide-react';
 
+import { ChunkedFileUploader, UploadProgressInfo, extractFilesWithFolderPaths } from '../utils/chunkedUploader';
+import { formatBytes } from '../utils/transfer';
+
+interface StagedPublishItem {
+  file: File;
+  relativePath: string;
+  id: string;
+  sizeFormatted: string;
+  sizeBytes: number;
+}
+
 export const PublishModal: React.FC = () => {
   const {
     currentUser,
@@ -36,9 +47,15 @@ export const PublishModal: React.FC = () => {
   const [isMature, setIsMature] = useState(false);
   const [matureReason, setMatureReason] = useState('Adult/Sensitive themes');
   const [downloadsEnabled, setDownloadsEnabled] = useState(true);
-  const [stagedFiles, setStagedFiles] = useState<TransferFile[]>([]);
+  const [stagedFiles, setStagedFiles] = useState<StagedPublishItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isSuccess, setIsSuccess] = useState(false);
+
+  // Upload Progress State
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<UploadProgressInfo | null>(null);
+  const [currentUploader, setCurrentUploader] = useState<ChunkedFileUploader | null>(null);
+  const [isPaused, setIsPaused] = useState(false);
 
   if (!isPublishModalOpen) return null;
 
@@ -46,68 +63,71 @@ export const PublishModal: React.FC = () => {
     setIsPublishModalOpen(false);
     setError(null);
     setIsSuccess(false);
+    setIsUploading(false);
+    setUploadProgress(null);
   };
 
-  // Local file upload handler
+  const addItems = (items: { file: File; relativePath: string }[]) => {
+    const newItems: StagedPublishItem[] = items.map((item, idx) => ({
+      file: item.file,
+      relativePath: item.relativePath,
+      id: `pub-staged-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 6)}`,
+      sizeFormatted: formatBytes(item.file.size),
+      sizeBytes: item.file.size,
+    }));
+    setStagedFiles(prev => [...prev, ...newItems]);
+    if (!title && items.length > 0 && items[0].relativePath.includes('/')) {
+      setTitle(items[0].relativePath.split('/')[0].replace(/[_-]/g, ' '));
+    }
+  };
+
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
-
-    Array.from(files).forEach((file, idx) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const url = reader.result as string;
-        const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
-        setStagedFiles(prev => [
-          ...prev,
-          {
-            id: `pub-up-${Date.now()}-${idx}`,
-            name: file.name,
-            url,
-            size: `${sizeMb} MB`,
-            type: file.type || 'application/octet-stream',
-            folderPath: 'Public_Uploads',
-          },
-        ]);
-      };
-      reader.readAsDataURL(file);
-    });
+    const items = Array.from(files).map(f => ({
+      file: f,
+      relativePath: f.webkitRelativePath || f.name,
+    }));
+    addItems(items);
   };
 
-  // Local folder upload handler (webkitdirectory)
   const handleFolderUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
-
-    const folderName = files[0].webkitRelativePath?.split('/')[0] || 'Published_Folder';
-    const loaded: TransferFile[] = [];
-
-    Array.from(files).forEach((file, idx) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const url = reader.result as string;
-        const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
-        loaded.push({
-          id: `pub-fld-${Date.now()}-${idx}`,
-          name: file.name,
-          url,
-          size: `${sizeMb} MB`,
-          type: file.type || 'application/octet-stream',
-          folderPath: folderName,
-        });
-
-        if (loaded.length === files.length) {
-          setStagedFiles(prev => [...prev, ...loaded]);
-          if (!title) {
-            setTitle(folderName.replace(/[_-]/g, ' '));
-          }
-        }
-      };
-      reader.readAsDataURL(file);
-    });
+    const items = Array.from(files).map(f => ({
+      file: f,
+      relativePath: f.webkitRelativePath || f.name,
+    }));
+    addItems(items);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handlePauseResume = () => {
+    if (!currentUploader) return;
+    if (isPaused) {
+      setIsPaused(false);
+      currentUploader.start().catch(err => {
+        if (!err.message?.includes('paused')) {
+          setError(err.message);
+        }
+      });
+    } else {
+      setIsPaused(true);
+      currentUploader.pause();
+    }
+  };
+
+  const handleCancelUpload = () => {
+    if (currentUploader) {
+      currentUploader.cancel();
+      setCurrentUploader(null);
+    }
+    setIsUploading(false);
+    setIsPaused(false);
+    setUploadProgress(null);
+    setError('Upload cancelled.');
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
@@ -126,35 +146,70 @@ export const PublishModal: React.FC = () => {
       return;
     }
 
-    const tags = tagsInput
-      .split(',')
-      .map(t => t.trim().toLowerCase())
-      .filter(t => t.length > 0);
+    setIsUploading(true);
+    setIsPaused(false);
 
-    const res = publishPackageAction({
-      title: title.trim(),
-      description: description.trim(),
-      authorUsername: currentUser.username,
-      authorAvatar: '',
-      category,
-      tags,
-      files: stagedFiles,
-      visibility,
-      downloadsEnabled,
-      isMature,
-      matureReason: isMature ? matureReason : undefined,
-    });
+    try {
+      const uploadedFiles: TransferFile[] = [];
 
-    if (res.success) {
-      setIsSuccess(true);
-      setTimeout(() => {
-        handleClose();
-        setActiveTab('published');
-      }, 1200);
-    } else {
-      setError(res.error || 'Failed to publish package');
+      for (let i = 0; i < stagedFiles.length; i++) {
+        const item = stagedFiles[i];
+        const uploader = new ChunkedFileUploader(item.file, item.relativePath, (info) => {
+          setUploadProgress({
+            ...info,
+            fileIndex: i + 1,
+            totalFiles: stagedFiles.length,
+          });
+        });
+        setCurrentUploader(uploader);
+
+        const uploaded = await uploader.start();
+        uploadedFiles.push(uploaded);
+      }
+
+      setCurrentUploader(null);
+
+      const tags = tagsInput
+        .split(',')
+        .map(t => t.trim().toLowerCase())
+        .filter(t => t.length > 0);
+
+      const res = publishPackageAction({
+        title: title.trim(),
+        description: description.trim(),
+        authorUsername: currentUser.username,
+        authorAvatar: '',
+        category,
+        tags,
+        files: uploadedFiles,
+        visibility,
+        downloadsEnabled,
+        isMature,
+        matureReason: isMature ? matureReason : undefined,
+      });
+
+      if (res.success) {
+        setIsSuccess(true);
+        setTimeout(() => {
+          handleClose();
+          setActiveTab('published');
+        }, 1200);
+      } else {
+        setError(res.error || 'Failed to publish package');
+      }
+    } catch (err: any) {
+      console.error('Publish upload error:', err);
+      if (!err.message?.includes('cancelled') && !err.message?.includes('paused')) {
+        setError(err.message || 'Failed to upload files for package.');
+      }
+    } finally {
+      setIsUploading(false);
+      setCurrentUploader(null);
     }
   };
+
+  const totalBytes = stagedFiles.reduce((acc, f) => acc + f.sizeBytes, 0);
+  const totalSizeFormatted = formatBytes(totalBytes);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
@@ -408,21 +463,83 @@ export const PublishModal: React.FC = () => {
                   {stagedFiles.length > 0 && (
                     <div className="mt-3 border-t pt-2 space-y-1 border-[#383a40]">
                       <div className="flex items-center justify-between text-[11px] font-mono-code font-semibold text-neutral-300">
-                        <span>{stagedFiles.length} files staged for publishing</span>
-                        <span>
-                          {stagedFiles.reduce((acc, f) => acc + (parseFloat(f.size) || 1), 0).toFixed(1)} MB
-                        </span>
+                        <span>{stagedFiles.length} file{stagedFiles.length > 1 ? 's' : ''} staged for publishing</span>
+                        <span className="text-white font-bold">{totalSizeFormatted}</span>
                       </div>
                       <div className="max-h-28 overflow-y-auto space-y-1 pr-1 font-mono-code text-[10px]">
-                        {stagedFiles.map((f) => (
+                        {stagedFiles.map((f, idx) => (
                           <div
                             key={f.id}
                             className="flex items-center justify-between py-1 px-2 rounded bg-[#1e1f22] text-neutral-300"
                           >
-                            <span className="truncate max-w-[280px]">{f.name}</span>
-                            <span>{f.size}</span>
+                            <span className="truncate max-w-[280px]" title={f.relativePath}>{f.relativePath}</span>
+                            <div className="flex items-center gap-2">
+                              <span>{f.sizeFormatted}</span>
+                              {!isUploading && (
+                                <button
+                                  type="button"
+                                  onClick={() => setStagedFiles(prev => prev.filter((_, i) => i !== idx))}
+                                  className="text-neutral-500 hover:text-rose-400"
+                                >
+                                  ✕
+                                </button>
+                              )}
+                            </div>
                           </div>
                         ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Live chunk upload progress bar in modal */}
+                  {isUploading && uploadProgress && (
+                    <div className="mt-3 rounded-xl border border-[#383a40] bg-[#1e1f22] p-3 space-y-2">
+                      <div className="flex items-center justify-between text-xs font-mono-code">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Upload className="h-3 w-3 animate-bounce text-indigo-400 shrink-0" />
+                          <span className="text-white truncate font-semibold max-w-[200px]" title={uploadProgress.fileName}>
+                            {uploadProgress.fileName}
+                          </span>
+                          <span className="text-[10px] text-neutral-400 shrink-0">
+                            ({uploadProgress.fileIndex}/{uploadProgress.totalFiles})
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="text-emerald-400 font-bold text-[11px]">{uploadProgress.speedFormatted}</span>
+                          <span className="text-white font-bold">{uploadProgress.percent}%</span>
+                        </div>
+                      </div>
+
+                      <div className="w-full h-1.5 rounded-full bg-[#2b2d31] overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all duration-200"
+                          style={{
+                            width: `${uploadProgress.percent}%`,
+                            backgroundColor: 'var(--color-accent, #5865f2)',
+                          }}
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between text-[10px] font-mono-code text-neutral-400">
+                        <span>
+                          {formatBytes(uploadProgress.loadedBytes)} / {formatBytes(uploadProgress.totalBytes)}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={handlePauseResume}
+                            className="flex items-center gap-1 px-2 py-0.5 rounded bg-[#2b2d31] hover:bg-[#313338] text-neutral-200 hover:text-white border border-[#383a40]"
+                          >
+                            <span>{isPaused ? 'Resume' : 'Pause'}</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleCancelUpload}
+                            className="flex items-center gap-1 px-2 py-0.5 rounded bg-[#2b2d31] hover:bg-rose-500/20 text-neutral-400 hover:text-rose-400 border border-[#383a40]"
+                          >
+                            <span>Cancel</span>
+                          </button>
+                        </div>
                       </div>
                     </div>
                   )}

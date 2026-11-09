@@ -94,18 +94,53 @@ export function verifyTransferAccess(
   return { canAccess: true };
 }
 
+export function parseFileSizeBytes(sizeStr: string): number {
+  if (!sizeStr) return 0;
+  const clean = sizeStr.trim().toLowerCase();
+  const match = clean.match(/^([\d.]+)\s*(b|bytes|kb|mb|gb|tb)?$/);
+  if (!match) return 0;
+  const num = parseFloat(match[1]) || 0;
+  const unit = match[2] || 'b';
+  switch (unit) {
+    case 'tb':
+      return num * 1024 * 1024 * 1024 * 1024;
+    case 'gb':
+      return num * 1024 * 1024 * 1024;
+    case 'mb':
+      return num * 1024 * 1024;
+    case 'kb':
+      return num * 1024;
+    default:
+      return num;
+  }
+}
+
+export function formatBytes(bytes: number): string {
+  if (bytes <= 0 || isNaN(bytes)) return '0 B';
+  const k = 1024;
+  const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  const idx = Math.min(i, units.length - 1);
+  const val = bytes / Math.pow(k, idx);
+  return `${val.toFixed(val >= 100 || idx === 0 ? 0 : 1)} ${units[idx]}`;
+}
+
 export function calculateTotalTransferSize(files: TransferFile[]): string {
   let totalBytes = 0;
   for (const f of files) {
-    const s = f.size.toLowerCase();
-    if (s.endsWith('mb')) {
-      totalBytes += parseFloat(s) * 1024 * 1024;
-    } else if (s.endsWith('kb')) {
-      totalBytes += parseFloat(s) * 1024;
-    } else if (s.endsWith('gb')) {
-      totalBytes += parseFloat(s) * 1024 * 1024 * 1024;
+    if (f.sizeBytes && f.sizeBytes > 0) {
+      totalBytes += f.sizeBytes;
     } else {
-      totalBytes += parseFloat(s) || 1024 * 500;
+      const s = f.size ? f.size.toLowerCase() : '';
+      if (s.endsWith('mb')) {
+        totalBytes += parseFloat(s) * 1024 * 1024;
+      } else if (s.endsWith('kb')) {
+        totalBytes += parseFloat(s) * 1024;
+      } else if (s.endsWith('gb')) {
+        totalBytes += parseFloat(s) * 1024 * 1024 * 1024;
+      } else {
+        totalBytes += parseFileSizeBytes(s) || 1024 * 500;
+      }
     }
   }
 
@@ -116,4 +151,59 @@ export function calculateTotalTransferSize(files: TransferFile[]): string {
     return `${(totalBytes / (1024 * 1024)).toFixed(1)} MB`;
   }
   return `${Math.round(totalBytes / 1024)} KB`;
+}
+
+export function calculateUserTotalStorageStats(
+  username: string,
+  transfers: FileTransferPackage[],
+  publishedPackages: any[] = []
+): {
+  totalBytes: number;
+  totalFormatted: string;
+  totalFiles: number;
+  totalTransfers: number;
+  userTransfers: FileTransferPackage[];
+} {
+  const clean = username.replace(/^@/, '').toLowerCase().trim();
+  const userTransfers = transfers.filter(
+    t => (t.senderUsername && t.senderUsername.toLowerCase() === clean) || (t.senderId && t.senderId.includes(clean))
+  );
+
+  let totalBytes = 0;
+  let totalFiles = 0;
+
+  for (const t of userTransfers) {
+    for (const f of t.files || []) {
+      totalFiles++;
+      if (f.sizeBytes && f.sizeBytes > 0) {
+        totalBytes += f.sizeBytes;
+      } else {
+        totalBytes += parseFileSizeBytes(f.size);
+      }
+    }
+  }
+
+  // Also include files in community shared vault packages authored by user
+  const userPublished = publishedPackages.filter(
+    p => (p.authorUsername && p.authorUsername.toLowerCase() === clean) || (p.photographer && p.photographer.toLowerCase() === clean)
+  );
+
+  for (const p of userPublished) {
+    for (const f of p.files || p.images || []) {
+      totalFiles++;
+      if (f.sizeBytes && f.sizeBytes > 0) {
+        totalBytes += f.sizeBytes;
+      } else {
+        totalBytes += parseFileSizeBytes(f.size);
+      }
+    }
+  }
+
+  return {
+    totalBytes,
+    totalFormatted: formatBytes(totalBytes),
+    totalFiles,
+    totalTransfers: userTransfers.length,
+    userTransfers,
+  };
 }

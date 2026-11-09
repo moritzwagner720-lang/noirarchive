@@ -93,22 +93,23 @@ export const TransferPortalView: React.FC<{ transferId: string }> = ({ transferI
       const folderName = pkg.title.replace(/[^a-zA-Z0-9_-]/g, '_');
       const folder = zip.folder(folderName) || zip;
 
-      // Add each file
+      // Add each file preserving folder structure
       for (let i = 0; i < pkg.files.length; i++) {
         const file = pkg.files[i];
+        const relativeFilePath = file.relativePath || file.name;
         try {
           if (file.url.startsWith('data:')) {
             const base64Data = file.url.split(',')[1];
-            folder.file(file.name, base64Data, { base64: true });
+            folder.file(relativeFilePath, base64Data, { base64: true });
           } else {
             const res = await fetch(file.url);
             const blob = await res.blob();
-            folder.file(file.name, blob);
+            folder.file(relativeFilePath, blob);
           }
         } catch {
           folder.file(
-            file.name.replace(/\.\w+$/, '.txt'),
-            `Archive Item: ${file.name}\nSource: ${file.url}`
+            relativeFilePath.replace(/\.\w+$/, '.txt'),
+            `Archive Item: ${file.name}\nPath: ${relativeFilePath}\nSource: ${file.url}`
           );
         }
       }

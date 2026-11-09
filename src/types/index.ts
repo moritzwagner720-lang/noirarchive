@@ -137,6 +137,28 @@ export interface TransferFile {
   size: string;
   type: string;
   folderPath?: string;
+  relativePath?: string;
+  sizeBytes?: number;
+  uploadedAt?: string;
+  storageRef?: string;
+}
+
+export interface StorageQuotaInfo {
+  provider: 'supabase' | 'local_disk' | 'render';
+  providerName: string;
+  usedBytes: number;
+  usedFormatted: string;
+  totalCapacityBytes?: number | null;
+  totalCapacityFormatted: string;
+  remainingBytes?: number | null;
+  remainingFormatted: string;
+  percentageUsed?: number | null;
+  totalFiles: number;
+  totalTransfers: number;
+  maxSingleFileBytes: number;
+  maxSingleFileFormatted: string;
+  supportsChunkedUploads: boolean;
+  notes: string;
 }
 
 export interface ClientReview {
