@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { UserAvatar } from './UserAvatar';
+import { NoirArchiveLogo } from './NoirArchiveLogo';
 import {
   Send,
   Users,
@@ -11,7 +12,7 @@ import {
   Search,
   Shield,
   Palette,
-  Archive,
+  Camera,
 } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
@@ -24,6 +25,7 @@ export const Navbar: React.FC = () => {
     setAuthModal,
     signOut,
     setIsTransferModalOpen,
+    setIsAvatarEditorOpen,
     friendRequests,
     publishedPackages,
   } = useApp();
@@ -41,22 +43,9 @@ export const Navbar: React.FC = () => {
         <div className="flex items-center gap-6">
           <button
             onClick={() => setActiveTab('transfers')}
-            className="group flex flex-col text-left focus:outline-none cursor-pointer"
+            className="group flex items-center text-left focus:outline-none cursor-pointer"
           >
-            <div className="flex items-center gap-2">
-              <span
-                className="flex h-7 w-7 items-center justify-center rounded-xl font-black text-xs text-white shadow-md transition-transform group-hover:scale-105"
-                style={{ backgroundColor: 'var(--color-accent, #5865f2)' }}
-              >
-                <Archive className="h-4 w-4" />
-              </span>
-              <span className="font-sans text-base font-extrabold tracking-tight text-white">
-                NOIR ARCHIVE
-              </span>
-            </div>
-            <span className="text-[10px] font-mono-code tracking-widest text-neutral-400 font-semibold">
-              FILE & FOLDER SHARING PLATFORM
-            </span>
+            <NoirArchiveLogo size="sm" />
           </button>
 
           {/* Navigation Links */}
@@ -164,7 +153,13 @@ export const Navbar: React.FC = () => {
                 onClick={() => setShowUserDropdown(!showUserDropdown)}
                 className="flex items-center gap-2 rounded-xl border border-[#383a40] bg-[#2b2d31] hover:bg-[#313338] px-2.5 py-1 text-left transition-colors cursor-pointer"
               >
-                <UserAvatar username={currentUser.username} size="xs" showStatus={true} status="online" />
+                <UserAvatar
+                  username={currentUser.username}
+                  avatarUrl={currentUser.customAvatar || currentUser.avatar}
+                  size="xs"
+                  showStatus={true}
+                  status="online"
+                />
                 <span className="hidden sm:inline font-mono-code text-xs font-semibold text-white">
                   @{currentUser.username}
                 </span>
@@ -183,6 +178,17 @@ export const Navbar: React.FC = () => {
                   </div>
 
                   <div className="space-y-1">
+                    <button
+                      onClick={() => {
+                        setIsAvatarEditorOpen(true);
+                        setShowUserDropdown(false);
+                      }}
+                      className="flex w-full items-center gap-2 py-1.5 px-2 rounded-xl text-xs text-neutral-200 hover:bg-[#313338] transition-colors cursor-pointer"
+                    >
+                      <Camera className="h-4 w-4 text-indigo-400" />
+                      <span>Customize Profile Picture</span>
+                    </button>
+
                     <button
                       onClick={() => {
                         setActiveTab('settings');

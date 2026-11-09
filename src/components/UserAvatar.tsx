@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { getDefaultAvatarInitial, getAvatarColorForUsername } from '../utils/avatar';
+import { useApp } from '../context/AppContext';
 
 interface UserAvatarProps {
   username?: string;
@@ -29,7 +30,7 @@ const STATUS_COLORS = {
 
 export const UserAvatar: React.FC<UserAvatarProps> = ({
   username = 'User',
-  avatarUrl,
+  avatarUrl: propAvatarUrl,
   size = 'md',
   shape = 'squircle',
   className = '',
@@ -37,18 +38,36 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
   status = 'online',
 }) => {
   const [imgFailed, setImgFailed] = useState(false);
+
+  // Look up custom avatar from application context if not explicitly passed
+  let contextAvatar: string | undefined;
+  try {
+    const { users, currentUser } = useApp();
+    const clean = username.toLowerCase().trim();
+    if (currentUser && currentUser.username.toLowerCase().trim() === clean) {
+      contextAvatar = currentUser.customAvatar || currentUser.avatar || undefined;
+    } else if (users && users.length > 0) {
+      const match = users.find(u => u.username.toLowerCase().trim() === clean);
+      contextAvatar = match?.customAvatar || match?.avatar || undefined;
+    }
+  } catch {
+    // Outside AppProvider context (e.g. test runner)
+  }
+
+  const effectiveAvatarUrl = propAvatarUrl !== undefined ? propAvatarUrl : contextAvatar;
+
   const initial = getDefaultAvatarInitial(username);
   const color = getAvatarColorForUsername(username);
   const dimensions = SIZE_MAP[size] || SIZE_MAP.md;
   const roundedClass = shape === 'circle' ? 'rounded-full' : dimensions.radius;
 
-  const hasCustomImage = Boolean(avatarUrl && !imgFailed && !avatarUrl.includes('unsplash.com'));
+  const hasCustomImage = Boolean(effectiveAvatarUrl && !imgFailed && !effectiveAvatarUrl.includes('unsplash.com'));
 
   return (
     <div className={`relative inline-flex items-center justify-center shrink-0 select-none ${className}`}>
       {hasCustomImage ? (
         <img
-          src={avatarUrl!}
+          src={effectiveAvatarUrl!}
           alt={`@${username}`}
           onError={() => setImgFailed(true)}
           className={`${dimensions.box} ${roundedClass} object-cover shadow-sm border border-white/10`}

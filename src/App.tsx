@@ -16,6 +16,11 @@ import { TransferPortalView } from './components/TransferPortalView';
 import { PublishModal } from './components/PublishModal';
 import { AuthModal } from './components/AuthModal';
 import { AuthGate } from './components/AuthGate';
+import { SeasonalBackground } from './components/SeasonalBackground';
+import { AvatarEditorModal } from './components/AvatarEditorModal';
+import { MediaPreviewModal } from './components/MediaPreviewModal';
+import { ReportModal } from './components/ReportModal';
+import { NoirArchiveLogo } from './components/NoirArchiveLogo';
 import { APP_VERSION } from './version';
 
 const AppContent: React.FC = () => {
@@ -23,6 +28,12 @@ const AppContent: React.FC = () => {
     activeTab,
     currentUser,
     activeTransferPortalId,
+    isAvatarEditorOpen,
+    setIsAvatarEditorOpen,
+    activePreviewMedia,
+    setActivePreviewMedia,
+    activeReportModalPackage,
+    setActiveReportModalPackage,
   } = useApp();
 
   // Strict scroll position reset: Always start at top on navigation
@@ -50,6 +61,7 @@ const AppContent: React.FC = () => {
   if (!currentUser) {
     return (
       <div className="flex flex-col min-h-screen bg-[#1e1f22] text-white">
+        <SeasonalBackground />
         <AuthGate />
       </div>
     );
@@ -58,21 +70,42 @@ const AppContent: React.FC = () => {
   // If a direct transfer link is accessed (e.g. ?transfer=TR-4912)
   if (activeTransferPortalId) {
     return (
-      <div className="min-h-screen bg-[#1e1f22] text-white flex flex-col justify-between">
-        <div>
+      <div className="min-h-screen bg-[#1e1f22] text-white flex flex-col justify-between relative">
+        <SeasonalBackground />
+        <div className="relative z-10">
           <Navbar />
           <TransferPortalView transferId={activeTransferPortalId} />
         </div>
         <SendTransferModal />
         <AuthModal />
         <PublishModal />
+        <AvatarEditorModal
+          isOpen={isAvatarEditorOpen}
+          onClose={() => setIsAvatarEditorOpen(false)}
+        />
+        <MediaPreviewModal
+          file={activePreviewMedia ? {
+            id: 'preview',
+            name: activePreviewMedia.title,
+            url: activePreviewMedia.url,
+            size: '',
+            type: activePreviewMedia.type === 'image' ? 'image/jpeg' : 'video/mp4',
+          } : null}
+          onClose={() => setActivePreviewMedia(null)}
+        />
+        <ReportModal
+          packageId={activeReportModalPackage?.id || null}
+          packageTitle={activeReportModalPackage?.title}
+          onClose={() => setActiveReportModalPackage(null)}
+        />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#1e1f22] text-white flex flex-col justify-between">
-      <div>
+    <div className="min-h-screen bg-[#1e1f22] text-white flex flex-col justify-between relative">
+      <SeasonalBackground />
+      <div className="relative z-10">
         <Navbar />
 
         {/* Tab Routing */}
@@ -109,38 +142,43 @@ const AppContent: React.FC = () => {
         </main>
       </div>
 
-      {/* Clean Discord-Inspired Grey Footer */}
-      <footer className="border-t py-8 px-4 sm:px-6 mt-16 border-[#383a40] bg-[#1e1f22] text-neutral-400">
-        <div className="mx-auto max-w-7xl flex flex-col gap-4 md:flex-row md:items-center md:justify-between font-mono-code text-xs">
-          <div className="flex items-center gap-3">
-            <div
-              className="flex h-6 w-6 items-center justify-center rounded-lg text-white font-black text-xs"
-              style={{ backgroundColor: 'var(--color-accent, #5865f2)' }}
-            >
-              N
+      {/* Clean Discord-Inspired Grey Footer with Safety Disclaimers */}
+      <footer className="relative z-10 border-t py-8 px-4 sm:px-6 mt-16 border-[#383a40] bg-[#1e1f22] text-neutral-400">
+        <div className="mx-auto max-w-7xl space-y-5">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between font-mono-code text-xs">
+            <div className="flex items-center gap-3">
+              <NoirArchiveLogo size="sm" showText={false} />
+              <div>
+                <span className="font-sans font-bold text-white tracking-wider">
+                  NOIR ARCHIVE
+                </span>
+                <span className="ml-2 text-neutral-400 text-[11px]">
+                  High-Speed File & Folder Sharing Platform
+                </span>
+              </div>
             </div>
-            <div>
-              <span className="font-sans font-bold text-white tracking-wider">
-                NOIR ARCHIVE
-              </span>
-              <span className="ml-2 text-neutral-400 text-[11px]">
-                High-Speed File & Folder Sharing Platform
-              </span>
+
+            <div className="flex flex-wrap items-center gap-4 text-[11px] text-neutral-400">
+              <span>Direct Transfers</span>
+              <span>•</span>
+              <span>Friend Groups</span>
+              <span>•</span>
+              <span>Shared Vault</span>
+              <span>•</span>
+              <span>Discord Grey System</span>
+            </div>
+
+            <div className="text-[11px] text-neutral-400">
+              © {new Date().getFullYear()} NOIR ARCHIVE • v{APP_VERSION}
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-4 text-[11px] text-neutral-400">
-            <span>Direct Transfers</span>
-            <span>•</span>
-            <span>Friend Groups</span>
-            <span>•</span>
-            <span>Shared Vault</span>
-            <span>•</span>
-            <span>Discord Grey System</span>
-          </div>
-
-          <div className="text-[11px] text-neutral-400">
-            © {new Date().getFullYear()} NOIR ARCHIVE • v{APP_VERSION}
+          {/* Security & Safety Notice */}
+          <div className="pt-4 border-t border-[#383a40]/60 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-[11px] font-mono-code text-neutral-400">
+            <p className="max-w-3xl leading-relaxed">
+              <strong className="text-neutral-300">Safety Notice:</strong> Files and folders may contain viruses or malicious software. Uploaded files are not automatically scanned. Only download files from sources you trust. Never upload passwords, private keys, or sensitive personal information. Always verify a file before opening it.
+            </p>
+            <span className="shrink-0 text-neutral-400">Encrypted Transport</span>
           </div>
         </div>
       </footer>
@@ -149,6 +187,25 @@ const AppContent: React.FC = () => {
       <SendTransferModal />
       <AuthModal />
       <PublishModal />
+      <AvatarEditorModal
+        isOpen={isAvatarEditorOpen}
+        onClose={() => setIsAvatarEditorOpen(false)}
+      />
+      <MediaPreviewModal
+        file={activePreviewMedia ? {
+          id: 'preview',
+          name: activePreviewMedia.title,
+          url: activePreviewMedia.url,
+          size: '',
+          type: activePreviewMedia.type === 'image' ? 'image/jpeg' : 'video/mp4',
+        } : null}
+        onClose={() => setActivePreviewMedia(null)}
+      />
+      <ReportModal
+        packageId={activeReportModalPackage?.id || null}
+        packageTitle={activeReportModalPackage?.title}
+        onClose={() => setActiveReportModalPackage(null)}
+      />
     </div>
   );
 };

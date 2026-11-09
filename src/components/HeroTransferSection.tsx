@@ -359,6 +359,10 @@ export const HeroTransferSection: React.FC = () => {
                       />
                     </label>
                   </div>
+
+                  <p className="mt-3 text-[11px] font-mono-code text-neutral-400 text-center max-w-lg">
+                    <strong className="text-neutral-300">Safety Notice:</strong> Uploaded files and folders are not automatically scanned for viruses or malicious code. Only transfer files from trusted sources. Never upload private keys, passwords, or confidential credentials.
+                  </p>
                 </div>
 
                 {/* Transfer Title & Destination Selector */}

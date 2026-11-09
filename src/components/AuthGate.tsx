@@ -16,6 +16,7 @@ import {
   Shield,
   Layers,
 } from 'lucide-react';
+import { NoirArchiveLogo } from './NoirArchiveLogo';
 
 export const AuthGate: React.FC = () => {
   const { signIn, signUp, users } = useApp();
@@ -92,20 +93,7 @@ export const AuthGate: React.FC = () => {
       <header className="border-b px-4 py-4 sm:px-8 bg-[#2b2d31]/80 border-[#383a40] backdrop-blur-md relative z-10">
         <div className="mx-auto flex max-w-7xl items-center justify-between">
           <div className="flex items-center gap-3">
-            <div
-              className="flex h-8 w-8 items-center justify-center rounded-xl text-white font-black text-sm shadow-sm"
-              style={{ backgroundColor: 'var(--color-accent, #5865f2)' }}
-            >
-              N
-            </div>
-            <div>
-              <span className="font-sans text-base font-bold tracking-wider uppercase text-white">
-                NOIR ARCHIVE
-              </span>
-              <span className="hidden sm:inline-block ml-3 font-mono-code text-[11px] text-neutral-400 uppercase tracking-wider">
-                / FILE & FOLDER SHARING PLATFORM
-              </span>
-            </div>
+            <NoirArchiveLogo size="sm" showText={true} />
           </div>
 
           <div className="flex items-center gap-3">

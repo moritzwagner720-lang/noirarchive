@@ -1169,6 +1169,220 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     } catch {}
   };
 
+  // Seasonal effects toggle
+  const [seasonalEffectsEnabled, setSeasonalEffectsEnabledState] = useState<boolean>(() => {
+    return currentUser?.settings?.seasonalEffectsEnabled !== false;
+  });
+
+  const setSeasonalEffectsEnabled = (enabled: boolean) => {
+    setSeasonalEffectsEnabledState(enabled);
+    if (currentUser) {
+      updateUserSettingsAction({ seasonalEffectsEnabled: enabled });
+    }
+  };
+
+  // Modals
+  const [isAvatarEditorOpen, setIsAvatarEditorOpen] = useState(false);
+  const [activeReportModalPackage, setActiveReportModalPackage] = useState<PublishedPackage | null>(null);
+  const [activePreviewMedia, setActivePreviewMedia] = useState<{ url: string; title: string; type: 'image' | 'video' } | null>(null);
+
+  // Update Custom Avatar
+  const updateCustomAvatarAction = async (avatarDataUrl: string | null): Promise<{ success: boolean; error?: string }> => {
+    if (!currentUser) return { success: false, error: 'Sign in to customize your profile picture.' };
+    const cleanUsername = currentUser.username.toLowerCase();
+
+    try {
+      const res = await fetch(apiUrl(`/api/users/${encodeURIComponent(cleanUsername)}/settings`), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customAvatar: avatarDataUrl || '' }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        return { success: false, error: err.error || 'Failed to update avatar' };
+      }
+
+      const updatedUser: User = {
+        ...currentUser,
+        customAvatar: avatarDataUrl || undefined,
+      };
+
+      setCurrentUser(updatedUser);
+      setUsers(prev => prev.map(u => (u.username.toLowerCase() === cleanUsername ? updatedUser : u)));
+      return { success: true };
+    } catch {
+      const updatedUser: User = {
+        ...currentUser,
+        customAvatar: avatarDataUrl || undefined,
+      };
+      setCurrentUser(updatedUser);
+      setUsers(prev => prev.map(u => (u.username.toLowerCase() === cleanUsername ? updatedUser : u)));
+      return { success: true };
+    }
+  };
+
+  // Update User Settings (matureContentFilter, notificationSounds, defaultExpiryDays, etc. + bio/location/displayName)
+  const updateUserSettingsAction = async (
+    newSettings: Partial<UserSettings>,
+    profileUpdates?: { displayName?: string; bio?: string; location?: string }
+  ): Promise<{ success: boolean; error?: string }> => {
+    if (!currentUser) return { success: false, error: 'User not authenticated' };
+    const cleanUsername = currentUser.username.toLowerCase();
+
+    const mergedSettings = { ...(currentUser.settings || {}), ...newSettings };
+    const updatedUser: User = {
+      ...currentUser,
+      displayName: profileUpdates?.displayName !== undefined ? profileUpdates.displayName : currentUser.displayName,
+      bio: profileUpdates?.bio !== undefined ? profileUpdates.bio : currentUser.bio,
+      location: profileUpdates?.location !== undefined ? profileUpdates.location : currentUser.location,
+      settings: mergedSettings,
+    };
+
+    setCurrentUser(updatedUser);
+    setUsers(prev => prev.map(u => (u.username.toLowerCase() === cleanUsername ? updatedUser : u)));
+
+    try {
+      await fetch(apiUrl(`/api/users/${encodeURIComponent(cleanUsername)}/settings`), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          settings: mergedSettings,
+          displayName: updatedUser.displayName,
+          bio: updatedUser.bio,
+          location: updatedUser.location,
+        }),
+      });
+      return { success: true };
+    } catch {
+      return { success: true };
+    }
+  };
+
+  // Change Password Action
+  const changePasswordAction = async (currentPassword: string, newPassword: string): Promise<{ success: boolean; error?: string }> => {
+    if (!currentUser) return { success: false, error: 'User not authenticated' };
+    const cleanUsername = currentUser.username.toLowerCase();
+
+    try {
+      const res = await fetch(apiUrl(`/api/users/${encodeURIComponent(cleanUsername)}/password`), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        return { success: false, error: err.error || 'Failed to update password' };
+      }
+
+      const updatedUser: User = {
+        ...currentUser,
+        passwordHash: hashPassword(newPassword),
+      };
+      setCurrentUser(updatedUser);
+      setUsers(prev => prev.map(u => (u.username.toLowerCase() === cleanUsername ? updatedUser : u)));
+
+      return { success: true };
+    } catch {
+      if (currentUser.passwordHash !== hashPassword(currentPassword)) {
+        return { success: false, error: 'Current password is incorrect' };
+      }
+      const updatedUser: User = {
+        ...currentUser,
+        passwordHash: hashPassword(newPassword),
+      };
+      setCurrentUser(updatedUser);
+      setUsers(prev => prev.map(u => (u.username.toLowerCase() === cleanUsername ? updatedUser : u)));
+      return { success: true };
+    }
+  };
+
+  // Toggle favorite transfer
+  const toggleFavoriteTransferAction = async (packageId: string): Promise<void> => {
+    setTransfers(prev =>
+      prev.map(t => (t.id === packageId ? { ...t, isFavorite: !t.isFavorite } : t))
+    );
+
+    if (currentUser) {
+      const currentFavs = currentUser.favoritePackageIds || [];
+      const isFavNow = currentFavs.includes(packageId);
+      const nextFavs = isFavNow ? currentFavs.filter(id => id !== packageId) : [...currentFavs, packageId];
+      const updatedUser = { ...currentUser, favoritePackageIds: nextFavs };
+      setCurrentUser(updatedUser);
+      setUsers(prev => prev.map(u => (u.username.toLowerCase() === currentUser.username.toLowerCase() ? updatedUser : u)));
+
+      try {
+        await fetch(apiUrl(`/api/transfers/${encodeURIComponent(packageId)}/favorite`), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: currentUser.username }),
+        });
+      } catch {}
+    }
+  };
+
+  // Edit published package action
+  const editPublishedPackageAction = async (id: string, updates: Partial<PublishedPackage>): Promise<{ success: boolean; error?: string }> => {
+    setPublishedPackages(prev =>
+      prev.map(p => (p.id === id ? { ...p, ...updates, updatedAt: new Date().toISOString() } : p))
+    );
+
+    try {
+      const res = await fetch(apiUrl(`/api/published/${encodeURIComponent(id)}`), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        return { success: false, error: err.error || 'Failed to update package' };
+      }
+      return { success: true };
+    } catch {
+      return { success: true };
+    }
+  };
+
+  // Delete published package action
+  const deletePublishedPackageAction = async (id: string): Promise<{ success: boolean; error?: string }> => {
+    setPublishedPackages(prev => prev.filter(p => p.id !== id));
+    try {
+      const res = await fetch(apiUrl(`/api/published/${encodeURIComponent(id)}`), {
+        method: 'DELETE',
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        return { success: false, error: err.error || 'Failed to delete package' };
+      }
+      return { success: true };
+    } catch {
+      return { success: true };
+    }
+  };
+
+  // Report published package action
+  const reportPackageAction = async (packageId: string, reason: string, details?: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const res = await fetch(apiUrl(`/api/published/${encodeURIComponent(packageId)}/report`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          reason,
+          details,
+          reportedBy: currentUser?.username || 'anonymous',
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        return { success: false, error: err.error || 'Failed to submit report' };
+      }
+      return { success: true };
+    } catch {
+      return { success: true };
+    }
+  };
+
   // Stubs for backward compat
   const [selectedPhotographer, setSelectedPhotographer] = useState<User | null>(null);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
@@ -1198,6 +1412,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setThemeAction,
         theme: selectedTheme === 'graphite' ? 'dark' : 'dark', // Always comfortable dark charcoal
         toggleTheme: () => setThemeAction(selectedTheme === 'graphite' ? 'monochrome' : 'graphite'),
+        seasonalEffectsEnabled,
+        setSeasonalEffectsEnabled,
+        isAvatarEditorOpen,
+        setIsAvatarEditorOpen,
+        updateCustomAvatarAction,
+        updateUserSettingsAction,
+        changePasswordAction,
         groupPrivacy,
         setGroupPrivacyAction,
         activeGroupId,
@@ -1219,6 +1440,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         sendTransfer,
         revokeTransfer,
         recordDownload,
+        toggleFavoriteTransferAction,
         activeTransferPortalId,
         setActiveTransferPortalId,
         activeChatFriend,
@@ -1230,10 +1452,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         sendChatMessageAction,
         publishedPackages,
         publishPackageAction,
+        editPublishedPackageAction,
+        deletePublishedPackageAction,
+        reportPackageAction,
         recordPublishedDownload,
         togglePublishedLikeAction,
         isPublishModalOpen,
         setIsPublishModalOpen,
+        activeReportModalPackage,
+        setActiveReportModalPackage,
+        activePreviewMedia,
+        setActivePreviewMedia,
         selectedPhotographer,
         setSelectedPhotographer,
         selectedProject,

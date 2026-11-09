@@ -10,6 +10,10 @@ export interface CreatePublishedInput {
   tags?: string[];
   coverUrl?: string;
   files: TransferFile[];
+  visibility?: 'public' | 'unlisted' | 'private';
+  downloadsEnabled?: boolean;
+  isMature?: boolean;
+  matureReason?: string;
 }
 
 export function createPublishedPackage(input: CreatePublishedInput): PublishedPackage {
@@ -46,6 +50,12 @@ export function createPublishedPackage(input: CreatePublishedInput): PublishedPa
     downloadsCount: 0,
     likesCount: 0,
     likedBy: [],
+    visibility: input.visibility || 'public',
+    downloadsEnabled: input.downloadsEnabled !== false,
+    isMature: Boolean(input.isMature),
+    matureReason: input.matureReason || undefined,
+    reportsCount: 0,
+    reportedBy: [],
     createdAt: new Date().toISOString(),
   };
 }
@@ -54,9 +64,31 @@ export function filterPublishedPackages(
   packages: PublishedPackage[],
   query: string,
   category: string = 'all',
-  sortBy: 'latest' | 'downloads' | 'likes' = 'latest'
+  sortBy: 'latest' | 'downloads' | 'likes' = 'latest',
+  options?: {
+    currentUsername?: string;
+    matureFilter?: 'show' | 'warn' | 'hide';
+  }
 ): PublishedPackage[] {
   let result = [...packages];
+
+  // Visibility: Filter out private packages not owned by current user
+  if (options?.currentUsername) {
+    const me = options.currentUsername.toLowerCase();
+    result = result.filter(p => {
+      if (p.visibility === 'private') {
+        return p.authorUsername.toLowerCase() === me;
+      }
+      return true;
+    });
+  } else {
+    result = result.filter(p => p.visibility !== 'private');
+  }
+
+  // Mature filter
+  if (options?.matureFilter === 'hide') {
+    result = result.filter(p => !p.isMature);
+  }
 
   // Category filter
   if (category !== 'all') {

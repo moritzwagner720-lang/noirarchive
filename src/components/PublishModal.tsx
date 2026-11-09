@@ -12,6 +12,9 @@ import {
   AlertCircle,
   Tag,
   Layers,
+  ShieldAlert,
+  Eye,
+  Lock,
 } from 'lucide-react';
 
 export const PublishModal: React.FC = () => {
@@ -29,6 +32,10 @@ export const PublishModal: React.FC = () => {
   const [category, setCategory] = useState<PhotoCategory>('architecture');
   const [tagsInput, setTagsInput] = useState('archive, files, direct-download');
   const [sourceType, setSourceType] = useState<'upload' | 'folder-upload'>('upload');
+  const [visibility, setVisibility] = useState<'public' | 'unlisted' | 'private'>('public');
+  const [isMature, setIsMature] = useState(false);
+  const [matureReason, setMatureReason] = useState('Adult/Sensitive themes');
+  const [downloadsEnabled, setDownloadsEnabled] = useState(true);
   const [stagedFiles, setStagedFiles] = useState<TransferFile[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isSuccess, setIsSuccess] = useState(false);
@@ -132,6 +139,10 @@ export const PublishModal: React.FC = () => {
       category,
       tags,
       files: stagedFiles,
+      visibility,
+      downloadsEnabled,
+      isMature,
+      matureReason: isMature ? matureReason : undefined,
     });
 
     if (res.success) {
@@ -151,7 +162,7 @@ export const PublishModal: React.FC = () => {
         {/* Close Button */}
         <button
           onClick={handleClose}
-          className="absolute top-4 right-4 flex h-8 w-8 items-center justify-center rounded-xl border border-[#383a40] text-neutral-400 hover:bg-[#313338] hover:text-white transition-colors"
+          className="absolute top-4 right-4 flex h-8 w-8 items-center justify-center rounded-xl border border-[#383a40] text-neutral-400 hover:bg-[#313338] hover:text-white transition-colors cursor-pointer"
         >
           <X className="h-4 w-4" />
         </button>
@@ -166,7 +177,7 @@ export const PublishModal: React.FC = () => {
             </div>
             <h3 className="text-2xl font-bold font-sans text-white">Files Published Successfully!</h3>
             <p className="mt-2 text-xs font-mono-code text-neutral-400">
-              Your bundle is now public in the shared vault for direct download.
+              Your bundle is now registered in the shared vault according to your visibility settings.
             </p>
           </div>
         ) : (
@@ -186,7 +197,7 @@ export const PublishModal: React.FC = () => {
                 Share Files & Folders Publicly
               </h2>
               <p className="mt-1 text-xs text-neutral-400">
-                Publish a package or archive to the shared vault so anyone on Noir Archive can download it.
+                Publish a package or archive to the shared vault so collaborators on Noir Archive can discover and download it.
               </p>
             </div>
 
@@ -247,6 +258,71 @@ export const PublishModal: React.FC = () => {
                 />
               </div>
 
+              {/* Visibility and Download Permissions */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider font-mono-code mb-1 text-neutral-300">
+                    Visibility
+                  </label>
+                  <select
+                    value={visibility}
+                    onChange={e => setVisibility(e.target.value as any)}
+                    className="w-full rounded-xl border py-2 px-3 text-xs bg-[#1e1f22] border-[#383a40] text-white focus:outline-none"
+                  >
+                    <option value="public">Public (Visible in vault feed)</option>
+                    <option value="unlisted">Unlisted (Direct link only)</option>
+                    <option value="private">Private (Only you can access)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider font-mono-code mb-1 text-neutral-300">
+                    Direct Downloads
+                  </label>
+                  <label className="flex items-center gap-2 p-2 rounded-xl bg-[#1e1f22] border border-[#383a40] cursor-pointer text-xs">
+                    <input
+                      type="checkbox"
+                      checked={downloadsEnabled}
+                      onChange={e => setDownloadsEnabled(e.target.checked)}
+                      className="accent-[var(--color-accent,#5865f2)]"
+                    />
+                    <span>Allow direct ZIP downloads</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Mature Content Classification */}
+              <div className="rounded-xl border border-[#383a40] bg-[#232428] p-3 space-y-2">
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-neutral-200">
+                  <input
+                    type="checkbox"
+                    checked={isMature}
+                    onChange={e => setIsMature(e.target.checked)}
+                    className="accent-amber-500"
+                  />
+                  <ShieldAlert className="h-4 w-4 text-amber-400" />
+                  <span>Mark as Mature / Sensitive Content</span>
+                </label>
+
+                {isMature && (
+                  <div className="pl-6 pt-1 animate-in fade-in">
+                    <label className="block text-[10px] font-mono-code text-neutral-400 mb-1">
+                      Classification Reason:
+                    </label>
+                    <select
+                      value={matureReason}
+                      onChange={e => setMatureReason(e.target.value)}
+                      className="w-full rounded-lg border py-1.5 px-2.5 text-xs bg-[#1e1f22] border-[#383a40] text-neutral-200"
+                    >
+                      <option value="Adult/Sensitive themes">Adult / Sensitive themes</option>
+                      <option value="Artistic nudity/figurative">Artistic nudity / Figurative art</option>
+                      <option value="Graphic intensity/horror">Graphic intensity / Horror</option>
+                      <option value="Unfiltered user files">Unfiltered user files</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+
               {/* Source Mode Tabs */}
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider font-mono-code mb-2 text-neutral-300">
@@ -256,7 +332,7 @@ export const PublishModal: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setSourceType('upload')}
-                    className={`py-1.5 rounded-lg transition-all font-semibold ${
+                    className={`py-1.5 rounded-lg transition-all font-semibold cursor-pointer ${
                       sourceType === 'upload'
                         ? 'text-white shadow-sm'
                         : 'text-neutral-400 hover:text-white'
@@ -274,7 +350,7 @@ export const PublishModal: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setSourceType('folder-upload')}
-                    className={`py-1.5 rounded-lg transition-all font-semibold ${
+                    className={`py-1.5 rounded-lg transition-all font-semibold cursor-pointer ${
                       sourceType === 'folder-upload'
                         ? 'text-white shadow-sm'
                         : 'text-neutral-400 hover:text-white'
@@ -350,6 +426,11 @@ export const PublishModal: React.FC = () => {
                       </div>
                     </div>
                   )}
+
+                  {/* Safety Notice Near Upload Controls */}
+                  <div className="mt-3 p-2.5 rounded-lg bg-[#1e1f22] border border-amber-500/20 text-[11px] text-amber-200/90 leading-tight">
+                    <strong>Safety Notice:</strong> Files are not automatically scanned for malware or viruses. Only publish files you have the right to distribute. Never upload sensitive personal data or private keys.
+                  </div>
                 </div>
               </div>
 
@@ -376,14 +457,14 @@ export const PublishModal: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleClose}
-                  className="px-4 py-2 text-xs font-medium rounded-xl text-neutral-400 hover:bg-[#313338] transition-colors"
+                  className="px-4 py-2 text-xs font-medium rounded-xl text-neutral-400 hover:bg-[#313338] transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
 
                 <button
                   type="submit"
-                  className="flex items-center gap-2 rounded-xl px-6 py-2.5 text-xs font-bold text-white shadow-lg hover:brightness-110 active:scale-[0.98] transition-all"
+                  className="flex items-center gap-2 rounded-xl px-6 py-2.5 text-xs font-bold text-white shadow-lg hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer"
                   style={{ backgroundColor: 'var(--color-accent, #5865f2)' }}
                 >
                   <Globe className="h-3.5 w-3.5" />

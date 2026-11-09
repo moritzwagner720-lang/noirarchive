@@ -19,6 +19,8 @@ import {
   Copy,
   FileText,
   Folder,
+  FileImage,
+  FileVideo,
 } from 'lucide-react';
 import JSZip from 'jszip';
 
@@ -28,6 +30,7 @@ export const TransferPortalView: React.FC<{ transferId: string }> = ({ transferI
     setActiveTransferPortalId,
     recordDownload,
     addTransferReview,
+    setActivePreviewMedia,
   } = useApp();
 
   const [passwordInput, setPasswordInput] = useState('');
@@ -298,41 +301,72 @@ export const TransferPortalView: React.FC<{ transferId: string }> = ({ transferI
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {pkg.files.map(file => (
-                <div
-                  key={file.id}
-                  className="rounded-2xl border p-4 transition-all duration-200 border-[#383a40] bg-[#2b2d31] hover:border-[#4e5058] flex flex-col justify-between"
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="h-10 w-10 rounded-xl bg-[#232428] border border-[#383a40] flex items-center justify-center shrink-0 text-neutral-400">
-                      <FileText className="h-5 w-5" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="font-mono-code text-xs font-semibold truncate text-white">
-                        {file.name}
-                      </p>
-                      <p className="text-[10px] font-mono-code text-neutral-400 mt-0.5">
-                        {file.size}
-                      </p>
-                      {file.folderPath && (
-                        <p className="text-[10px] font-mono-code text-neutral-500 truncate mt-0.5">
-                          {file.folderPath}
-                        </p>
-                      )}
-                    </div>
-                  </div>
+              {pkg.files.map(file => {
+                const isImage = file.type.startsWith('image/') || /\.(jpe?g|png|webp|gif|svg)$/i.test(file.name);
+                const isVideo = file.type.startsWith('video/') || /\.(mp4|webm|mov|mkv)$/i.test(file.name);
 
-                  <div className="mt-4 pt-3 border-t border-[#383a40] flex items-center justify-end">
-                    <button
-                      onClick={() => handleDownloadSingle(file)}
-                      className="flex items-center gap-1.5 rounded-xl border px-3 py-1.5 font-mono-code text-xs border-[#383a40] bg-[#232428] text-neutral-200 hover:border-neutral-400 transition-colors"
-                    >
-                      <Download className="h-3 w-3" />
-                      <span>Download</span>
-                    </button>
+                return (
+                  <div
+                    key={file.id}
+                    className="rounded-2xl border p-4 transition-all duration-200 border-[#383a40] bg-[#2b2d31] hover:border-[#4e5058] flex flex-col justify-between"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="h-10 w-10 rounded-xl bg-[#232428] border border-[#383a40] flex items-center justify-center shrink-0 text-neutral-300">
+                        {isImage ? (
+                          <FileImage className="h-5 w-5 text-indigo-400" />
+                        ) : isVideo ? (
+                          <FileVideo className="h-5 w-5 text-amber-400" />
+                        ) : (
+                          <FileText className="h-5 w-5 text-neutral-400" />
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-mono-code text-xs font-semibold truncate text-white">
+                          {file.name}
+                        </p>
+                        <p className="text-[10px] font-mono-code text-neutral-400 mt-0.5">
+                          {file.size}
+                        </p>
+                        {file.folderPath && (
+                          <p className="text-[10px] font-mono-code text-neutral-500 truncate mt-0.5">
+                            {file.folderPath}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="mt-4 pt-3 border-t border-[#383a40] flex items-center justify-end gap-2">
+                      {(isImage || isVideo) && (
+                        <button
+                          type="button"
+                          onClick={() => setActivePreviewMedia({
+                            url: file.url,
+                            title: file.name,
+                            type: isVideo ? 'video' : 'image',
+                          })}
+                          className="flex items-center gap-1.5 rounded-xl border px-3 py-1.5 font-mono-code text-xs border-[#383a40] bg-[#313338] text-neutral-200 hover:text-white transition-colors cursor-pointer"
+                        >
+                          <Eye className="h-3 w-3 text-indigo-400" />
+                          <span>Preview</span>
+                        </button>
+                      )}
+
+                      <button
+                        onClick={() => handleDownloadSingle(file)}
+                        className="flex items-center gap-1.5 rounded-xl border px-3 py-1.5 font-mono-code text-xs border-[#383a40] bg-[#232428] text-neutral-200 hover:border-neutral-400 transition-colors cursor-pointer"
+                      >
+                        <Download className="h-3 w-3" />
+                        <span>Download</span>
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
+            </div>
+
+            {/* Safety Notice in Portal */}
+            <div className="mt-6 rounded-xl border border-amber-500/25 bg-amber-500/10 p-3.5 text-xs text-amber-200/90 leading-relaxed font-mono-code">
+              <strong className="text-amber-300">Safety Notice:</strong> Uploaded files are not automatically scanned for viruses or malicious code. Always verify the sender's identity (@{pkg.senderUsername}) before downloading or executing files.
             </div>
           </div>
 
