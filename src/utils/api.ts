@@ -40,14 +40,14 @@ export function getApiBaseUrl(): string {
     return String((window as any).NOIR_API_URL).trim().replace(/\/$/, '');
   }
 
-  // 4. In Electron desktop runtime: ALWAYS default to the production cloud backend
-  // This guarantees cross-device sync between different PCs, accounts, and networks.
-  if (isElectronEnvironment()) {
-    return PRODUCTION_BACKEND_URL;
+  // 4. If current host is already the production backend, relative is fine
+  if (typeof window !== 'undefined' && window.location.origin === PRODUCTION_BACKEND_URL) {
+    return '';
   }
 
-  // 5. In Web browser dev/production on the server, use relative path (proxied by server.ts)
-  return '';
+  // 5. Default for ALL clients (Browser, Mobile Web, Windows Electron):
+  // Both browser and Windows clients connect to the exact same production backend: https://noirarchive.onrender.com
+  return PRODUCTION_BACKEND_URL;
 }
 
 export function apiUrl(endpoint: string): string {

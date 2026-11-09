@@ -643,15 +643,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const excludeParam = currentUser ? `&exclude=${encodeURIComponent(currentUser.username)}` : '';
     try {
       let remoteUsers: User[] | null = null;
-      // 1. Try search with query parameters
-      const res1 = await fetch(apiUrl(`/api/users/search?q=${encodeURIComponent(clean)}${excludeParam}`));
-      if (res1.ok) {
-        remoteUsers = await res1.json();
+      if (!clean) {
+        const res = await fetch(apiUrl('/api/users'));
+        if (res.ok) remoteUsers = await res.json();
       } else {
-        // 2. Fallback to path parameter format
-        const res2 = await fetch(apiUrl(`/api/users/search/${encodeURIComponent(clean || 'all')}`));
-        if (res2.ok) {
-          remoteUsers = await res2.json();
+        // 1. Try search with query parameters
+        const res1 = await fetch(apiUrl(`/api/users/search?q=${encodeURIComponent(clean)}${excludeParam}`));
+        if (res1.ok) {
+          remoteUsers = await res1.json();
+        } else {
+          // 2. Fallback to path parameter format
+          const res2 = await fetch(apiUrl(`/api/users/search/${encodeURIComponent(clean)}`));
+          if (res2.ok) {
+            remoteUsers = await res2.json();
+          }
         }
       }
 
