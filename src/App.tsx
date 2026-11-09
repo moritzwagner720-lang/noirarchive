@@ -19,7 +19,6 @@ import { AuthModal } from './components/AuthModal';
 import { SendTransferModal } from './components/SendTransferModal';
 import { TransferPortalView } from './components/TransferPortalView';
 import { AuthGate } from './components/AuthGate';
-import { DesktopTitlebar } from './components/DesktopTitlebar';
 import { SwitchAvatarModal } from './components/SwitchAvatarModal';
 import {
   Camera,
@@ -53,11 +52,32 @@ const AppContent: React.FC = () => {
 
   const isLight = theme === 'light';
 
+  // Strict scroll position reset: Always start at the top on load, reload, and internal tab/view navigation
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      if ('scrollRestoration' in window.history) {
+        window.history.scrollRestoration = 'manual';
+      }
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior });
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+      const root = document.getElementById('root');
+      if (root) root.scrollTop = 0;
+
+      // Reinforced frame to ensure post-layout rendering stays at top
+      const raf = requestAnimationFrame(() => {
+        window.scrollTo(0, 0);
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
+      });
+      return () => cancelAnimationFrame(raf);
+    }
+  }, [activeTab, activeTransferPortalId]);
+
   // Strict Login Gate: The user must log in before they can do anything in the app
   if (!currentUser) {
     return (
       <div className="flex flex-col min-h-screen">
-        <DesktopTitlebar />
         <AuthGate />
       </div>
     );
@@ -71,7 +91,6 @@ const AppContent: React.FC = () => {
           isLight ? 'bg-[#fcf8f5] text-stone-900' : 'bg-[#090503] text-white'
         }`}
       >
-        <DesktopTitlebar />
         <Navbar />
         <TransferPortalView transferId={activeTransferPortalId} />
         <LightboxModal />
@@ -104,7 +123,6 @@ const AppContent: React.FC = () => {
       }`}
     >
       <div>
-        <DesktopTitlebar />
         <Navbar />
 
         {/* Start Page (Explore / Home view) */}

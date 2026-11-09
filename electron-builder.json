@@ -12,14 +12,7 @@
     "electron/**/*",
     "build/icon.ico",
     "build/icon.png",
-    "server-storage.json",
     "package.json"
-  ],
-  "extraResources": [
-    {
-      "from": "server-storage.json",
-      "to": "server-storage.json"
-    }
   ],
   "win": {
     "target": [

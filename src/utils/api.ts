@@ -27,7 +27,12 @@ export function getApiBaseUrl(): string {
   if (typeof window !== 'undefined' && (window as any).noirDesktop?.getBackendUrl) {
     try {
       const desktopUrl = (window as any).noirDesktop.getBackendUrl();
-      if (desktopUrl && desktopUrl.trim()) {
+      if (
+        desktopUrl &&
+        desktopUrl.trim() &&
+        !desktopUrl.includes('localhost') &&
+        !desktopUrl.includes('127.0.0.1')
+      ) {
         return desktopUrl.trim().replace(/\/$/, '');
       }
     } catch {

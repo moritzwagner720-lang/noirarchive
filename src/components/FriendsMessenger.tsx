@@ -92,6 +92,8 @@ export const FriendsMessenger: React.FC = () => {
   }
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  const isFirstChatLoad = useRef(true);
 
   // Derive all active chat partners (friends + anyone who has messaged current user or vice versa)
   const messagePartners = Array.from(
@@ -208,9 +210,19 @@ export const FriendsMessenger: React.FC = () => {
           m.recipientUsername.toLowerCase() === currentUser.username.toLowerCase()))
   );
 
-  // Auto-scroll chat window when new messages arrive or when conversation changes
+  // Auto-scroll chat container strictly inside its own scrollable area (never scrolls the window or parent page)
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (chatContainerRef.current) {
+      if (isFirstChatLoad.current) {
+        chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+        isFirstChatLoad.current = false;
+      } else {
+        chatContainerRef.current.scrollTo({
+          top: chatContainerRef.current.scrollHeight,
+          behavior: 'smooth',
+        });
+      }
+    }
   }, [conversationMessages.length, activeChatFriend]);
 
   // Send regular text message
@@ -809,7 +821,7 @@ export const FriendsMessenger: React.FC = () => {
               </div>
 
               {/* Chat Messages Log */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4">
                 {conversationMessages.length === 0 ? (
                   <div className="flex h-full flex-col items-center justify-center text-center opacity-60 font-mono-code text-xs">
                     <MessageSquare className="h-8 w-8 mb-2 opacity-50 text-orange-400" />

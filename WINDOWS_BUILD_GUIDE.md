@@ -6,15 +6,17 @@ This guide explains how Noir Archive is configured as a native Windows desktop a
 
 ## 1. Architecture Overview
 
-- **Framework**: Electron (v34+) + React 19 + Vite 8
-- **Backend Architecture**: Embedded Express server running inside Electron
-- **Persistence**: Storage (`server-storage.json`) is stored in the user's persistent Windows AppData directory (`%APPDATA%\Noir Archive\server-storage.json`). All user profiles, transferred packages, chat messages, and photo archives persist across updates and restarts.
-- **Window Presentation**: Standalone window with browser chrome (address bars, developer menus, navigation bars) stripped out. Modern Windows 11/10 title bar overlay with native window controls (minimize, maximize, close) and draggable title area.
-- **Application Icons**:
-  - `build/icon.ico`: High-resolution Windows multi-size icon (256x256, 128x128, 64x64, 48x48, 32x32, 16x16)
-  - `build/icon.png`: 512x512 PNG master asset
-  - `build/installerIcon.ico`: NSIS installer wizard icon
-  - `build/uninstallerIcon.ico`: Windows Add/Remove programs uninstaller icon
+- **Framework**: Electron (v34+)
+- **Direct Website Host**: Electron loads the live production website directly:
+  ```javascript
+  mainWindow.loadURL("https://noirarchive.onrender.com");
+  ```
+- **Single Source of Truth**: The browser website is the single source of truth for the entire interface, features, animations, real-time messaging, transfers, and portfolio archives. No separate local React UI or embedded server is maintained.
+- **Persistence & Cloud Sync**: Uses the production Render backend and Supabase PostgreSQL database. No local JSON storage or mock data.
+- **Security**: Context isolation enabled, node integration disabled, no service-role secrets exposed to the renderer.
+- **Resilience**: Includes a branded offline / cold-start fallback screen with a "Retry Connection" button.
+- **Window Presentation**: Native Windows application window with clean auto-hidden menu bars, standard Windows control buttons (minimize, maximize, close), and custom multi-resolution application icons.
+- **External Links**: External links (such as external portfolios or mailto) automatically open in the user's default Windows web browser (Edge, Chrome, Firefox).
 
 ---
 
@@ -34,7 +36,7 @@ To build the installer on your Windows machine:
 3. The script will:
    - Verify Node.js
    - Install dependencies if missing
-   - Build the Vite frontend (`npm run build`)
+   - Build the distribution assets (`npm run build`)
    - Run Electron Builder to compile the NSIS installer (`npx electron-builder --win nsis`)
    - Open File Explorer automatically showing **`dist-electron\Setup.exe`**.
 
@@ -66,20 +68,9 @@ When a user runs `Setup.exe`:
 
 ---
 
-## 5. Running in Desktop Development Mode
+## 5. Project Configuration Files
 
-To test the Electron window locally without packaging:
-```cmd
-npm run electron:dev
-```
-This boots the embedded desktop backend, initializes the BrowserWindow, and renders Noir Archive.
-
----
-
-## 6. Project Configuration Files
-
-- `electron/main.cjs`: Electron main process controlling window lifecycle, single instance locking, and IPC.
-- `electron/server.cjs`: Embedded local backend server managing `/api/*` endpoints and data persistence.
-- `electron/preload.cjs`: Secure context bridge exposing desktop features to the frontend.
+- `electron/main.cjs`: Electron main process directly loading `https://noirarchive.onrender.com` with single-instance lock, secure webPreferences, offline retry screen, and external link handling.
+- `electron/preload.cjs`: Minimal context bridge exposing desktop client identity (`isDesktop: true`).
 - `electron-builder.json`: Configuration defining Windows targets, NSIS options, and output naming (`Setup.exe`).
 - `build/icon.ico`: High-resolution Windows application icon.
