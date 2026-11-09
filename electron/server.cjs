@@ -197,24 +197,43 @@ function createDesktopServer({ dataDir, distDir }) {
     res.json(store.users.map(sanitizeUser));
   });
 
-  app.get('/api/users/search/:query', (req, res) => {
-    const query = req.params.query.toLowerCase().trim();
+  // User search handler supporting:
+  // - /api/users/search?q=... or ?query=... or ?username=...
+  // - /api/users/search/:query
+  // - Optional ?exclude=... or ?current=... to omit the current user
+  function handleUserSearch(req, res) {
+    const rawQuery = req.query.q || req.query.query || req.query.username || req.params.query || '';
+    const query = String(rawQuery).replace(/^@/, '').toLowerCase().trim();
+    const rawExclude = req.query.exclude || req.query.current || '';
+    const exclude = String(rawExclude).replace(/^@/, '').toLowerCase().trim();
+
+    let matches = [];
     if (!query) {
-      return res.json(store.users.map(sanitizeUser));
-    }
-    const matches = store.users
-      .filter(
+      matches = store.users;
+    } else {
+      matches = store.users.filter(
         u =>
           u.username.toLowerCase().includes(query) ||
           (u.bio && u.bio.toLowerCase().includes(query)) ||
           (u.location && u.location.toLowerCase().includes(query))
-      )
-      .map(sanitizeUser);
-    res.json(matches);
-  });
+      );
+    }
+
+    if (exclude) {
+      matches = matches.filter(u => u.username.toLowerCase() !== exclude);
+    }
+
+    res.json(matches.map(sanitizeUser));
+  }
+
+  app.get('/api/users/search', handleUserSearch);
+  app.get('/api/users/search/:query', handleUserSearch);
 
   app.get('/api/users/:username', (req, res) => {
     const username = req.params.username.replace(/^@/, '').toLowerCase().trim();
+    if (username === 'search') {
+      return handleUserSearch(req, res);
+    }
     const user = store.users.find(u => u.username.toLowerCase() === username);
     if (!user) {
       return res.status(404).json({ error: `User @${req.params.username} not found` });

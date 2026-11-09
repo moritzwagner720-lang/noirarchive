@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { validateUsername, validatePassword } from '../utils/auth';
+import { APP_VERSION } from '../version';
 import {
   Lock,
   User as UserIcon,
@@ -139,7 +140,7 @@ export const AuthGate: React.FC = () => {
                   <Sun className="h-3.5 w-3.5 text-amber-400" />
                   <span>Dusk Mode</span>
                   <span className="font-mono-code text-[11px] font-bold text-[#ff6b00] px-1.5 py-0.5 rounded bg-orange-500/15 border border-orange-500/30">
-                    v1.28
+                    v{APP_VERSION}
                   </span>
                 </>
               )}

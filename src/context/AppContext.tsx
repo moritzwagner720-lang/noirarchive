@@ -640,35 +640,55 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   // Global search for user accounts across the platform
   const searchAccountsGlobally = async (query: string): Promise<User[]> => {
     const clean = query.trim().toLowerCase();
-    if (!clean) return users;
+    const excludeParam = currentUser ? `&exclude=${encodeURIComponent(currentUser.username)}` : '';
     try {
-      const res = await fetch(apiUrl(`/api/users/search/${encodeURIComponent(clean)}`));
-      if (res.ok) {
-        const remoteUsers: User[] = await res.json();
-        if (Array.isArray(remoteUsers)) {
-          setUsers(prev => {
-            const map = new Map<string, User>();
-            prev.forEach(u => map.set(u.username.toLowerCase(), u));
-            remoteUsers.forEach(u => {
-              const ex = map.get(u.username.toLowerCase());
-              map.set(u.username.toLowerCase(), {
-                ...u,
-                passwordHash: ex?.passwordHash || hashPassword('password123'),
-                friends: Array.from(new Set([...(ex?.friends || []), ...(u.friends || [])])),
-              });
-            });
-            return Array.from(map.values());
-          });
-          return remoteUsers;
+      let remoteUsers: User[] | null = null;
+      // 1. Try search with query parameters
+      const res1 = await fetch(apiUrl(`/api/users/search?q=${encodeURIComponent(clean)}${excludeParam}`));
+      if (res1.ok) {
+        remoteUsers = await res1.json();
+      } else {
+        // 2. Fallback to path parameter format
+        const res2 = await fetch(apiUrl(`/api/users/search/${encodeURIComponent(clean || 'all')}`));
+        if (res2.ok) {
+          remoteUsers = await res2.json();
         }
       }
-    } catch {}
+
+      if (Array.isArray(remoteUsers)) {
+        // Cache newly discovered users
+        setUsers(prev => {
+          const map = new Map<string, User>();
+          prev.forEach(u => map.set(u.username.toLowerCase(), u));
+          remoteUsers!.forEach(u => {
+            const ex = map.get(u.username.toLowerCase());
+            map.set(u.username.toLowerCase(), {
+              ...u,
+              passwordHash: ex?.passwordHash || hashPassword('password123'),
+              friends: Array.from(new Set([...(ex?.friends || []), ...(u.friends || [])])),
+            });
+          });
+          return Array.from(map.values());
+        });
+
+        // Always exclude the current user from search results
+        const filtered = currentUser
+          ? remoteUsers.filter(u => u.username.toLowerCase() !== currentUser.username.toLowerCase())
+          : remoteUsers;
+        return filtered;
+      }
+    } catch (err) {
+      console.warn('[Noir Archive] Account search network error:', err);
+    }
+
     return users.filter(
-      u => u.username.toLowerCase().includes(clean) || (u.bio && u.bio.toLowerCase().includes(clean))
+      u =>
+        (!currentUser || u.username.toLowerCase() !== currentUser.username.toLowerCase()) &&
+        (u.username.toLowerCase().includes(clean) || (u.bio && u.bio.toLowerCase().includes(clean)))
     );
   };
 
-  // Auth operations (purely username and password)
+  // Auth operations (purely username and password, strictly persisted to Supabase)
   const signUp = async (data: {
     username: string;
     password: string;
@@ -688,65 +708,61 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const cleanUsername = data.username.trim().toLowerCase();
 
-    // Verify uniqueness with backend server to avoid collision across independent sessions
-    try {
-      const checkRes = await fetch(apiUrl(`/api/users/${encodeURIComponent(cleanUsername)}`));
-      if (checkRes.ok) {
-        return { success: false, error: `The username "${cleanUsername}" is already taken` };
-      }
-    } catch {}
-
-    const newUser: User = {
-      id: `user-${Date.now()}`,
-      username: cleanUsername,
-      bio: data.bio?.trim() || 'Visual photographer & darkroom artist.',
-      avatar:
-        data.avatar ||
-        'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80',
-      location: data.location?.trim() || 'Worldwide',
-      passwordHash: hashPassword(data.password),
-      createdAt: new Date().toISOString(),
-      friends: [],
-    };
-
-    setUsers(prev => [...prev.filter(u => u.username.toLowerCase() !== cleanUsername), newUser]);
-    setCurrentUser(newUser);
-    setAuthModal(null);
-
-    // Save permanently to server
+    // Persist directly to production cloud server
     try {
       const res = await fetch(apiUrl('/api/auth/signup'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          username: newUser.username,
+          username: cleanUsername,
           password: data.password,
-          bio: newUser.bio,
-          avatar: newUser.avatar,
-          location: newUser.location,
+          bio: data.bio?.trim() || 'Visual artist and photographer.',
+          avatar: data.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80',
+          location: data.location?.trim() || 'Worldwide',
         }),
       });
+
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        if (err.error) {
-          return { success: false, error: err.error };
-        }
+        return { success: false, error: err.error || `Registration failed (HTTP ${res.status})` };
       }
-    } catch {}
 
-    return { success: true };
+      const resData = await res.json();
+      if (!resData.user) {
+        return { success: false, error: 'Malformed server response' };
+      }
+
+      const authenticatedUser: User = {
+        ...resData.user,
+        passwordHash: hashPassword(data.password),
+        friends: resData.user.friends || [],
+      };
+
+      setUsers(prev => [...prev.filter(u => u.username.toLowerCase() !== cleanUsername), authenticatedUser]);
+      setCurrentUser(authenticatedUser);
+      setAuthModal(null);
+
+      return { success: true };
+    } catch (err: any) {
+      console.error('[Noir Archive] Signup error:', err);
+      return {
+        success: false,
+        error: 'Cannot connect to Noir Archive cloud service (https://noirarchive.onrender.com). Please check your internet connection.',
+      };
+    }
   };
 
   const signIn = async (username: string, pass: string): Promise<{ success: boolean; error?: string }> => {
     const normalized = username.trim().toLowerCase();
 
-    // First attempt to verify with server for globally synchronized accounts across all devices
+    // Authenticate strictly with the production cloud server
     try {
       const res = await fetch(apiUrl('/api/auth/signin'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: normalized, password: pass }),
       });
+
       if (res.ok) {
         const data = await res.json();
         if (data.user) {
@@ -765,38 +781,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           setAuthModal(null);
           return { success: true };
         }
-      } else {
-        const err = await res.json().catch(() => ({}));
-        if (err.error && err.error.includes('password')) {
-          return { success: false, error: err.error };
-        }
       }
-    } catch {
-      // Backend offline fallback - continue to check local
+
+      const err = await res.json().catch(() => ({}));
+      return { success: false, error: err.error || 'Invalid username or password' };
+    } catch (err: any) {
+      console.error('[Noir Archive] SignIn error:', err);
+      return {
+        success: false,
+        error: 'Cannot connect to Noir Archive cloud service (https://noirarchive.onrender.com). Please check your internet connection.',
+      };
     }
-
-    // Local check fallback
-    let user = users.find(u => u.username.toLowerCase() === normalized);
-
-    if (!user) {
-      user = INITIAL_USERS.find(u => u.username.toLowerCase() === normalized);
-      if (user) {
-        setUsers(prev => [...prev, user!]);
-      }
-    }
-
-    if (!user) {
-      return { success: false, error: 'User with this username does not exist' };
-    }
-
-    if (!verifyPassword(pass, user.passwordHash)) {
-      return { success: false, error: 'Invalid password' };
-    }
-
-    setCurrentUser(user);
-    setAuthModal(null);
-
-    return { success: true };
   };
 
   const signOut = () => {
@@ -1017,31 +1012,31 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       return { success: false, error: `A friend request to @${targetUser.username} is already pending.` };
     }
 
-    const req = createFriendRequest(currentUser.username, targetUser.username);
-    setFriendRequests(prev => [req, ...prev]);
-
-    // Send to backend server
+    // Send strictly to production backend server
     try {
       const res = await fetch(apiUrl('/api/friend-requests'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fromUsername: currentUser.username, toUsername: targetUser.username }),
       });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.request) {
-          setFriendRequests(prev => [data.request, ...prev.filter(r => r.id !== data.request.id)]);
-        }
-      } else {
-        const errData = await res.json().catch(() => ({}));
-        if (errData.error) {
-          setFriendRequests(prev => prev.filter(r => r.id !== req.id));
-          return { success: false, error: errData.error };
-        }
-      }
-    } catch {}
 
-    return { success: true };
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        return { success: false, error: errData.error || `Failed to send friend request (HTTP ${res.status})` };
+      }
+
+      const data = await res.json();
+      if (data.request) {
+        setFriendRequests(prev => [data.request, ...prev.filter(r => r.id !== data.request.id)]);
+      }
+      return { success: true };
+    } catch (err: any) {
+      console.error('[Noir Archive] Send friend request error:', err);
+      return {
+        success: false,
+        error: 'Cloud sync error: Unable to reach Noir Archive cloud server (https://noirarchive.onrender.com). Please check your connection.',
+      };
+    }
   };
 
   const cancelFriendRequestAction = (requestId: string) => {

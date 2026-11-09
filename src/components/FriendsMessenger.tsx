@@ -22,9 +22,10 @@ import {
   X,
   Sun,
 } from 'lucide-react';
-import { TransferFile, ChatAttachment } from '../types';
+import { TransferFile, ChatAttachment, User } from '../types';
 import JSZip from 'jszip';
 import { FriendRequestsModal } from './FriendRequestsModal';
+import { APP_VERSION } from '../version';
 
 export const FriendsMessenger: React.FC = () => {
   const {
@@ -56,6 +57,10 @@ export const FriendsMessenger: React.FC = () => {
   const [showFileModal, setShowFileModal] = useState(false);
   const [isZipping, setIsZipping] = useState<string | null>(null);
   const [isRequestsModalOpen, setIsRequestsModalOpen] = useState(false);
+  const [searchResults, setSearchResults] = useState<User[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
 
   const isLight = theme === 'light';
 
@@ -128,12 +133,53 @@ export const FriendsMessenger: React.FC = () => {
     r => r.fromUsername.toLowerCase() === currentUser.username.toLowerCase() && r.status === 'pending'
   );
 
+  // Live debounced account search across Supabase cloud directory
+  useEffect(() => {
+    const query = addFriendInput.trim();
+    if (!query) {
+      setSearchResults([]);
+      setIsSearching(false);
+      setIsSearchOpen(false);
+      return;
+    }
+
+    setIsSearching(true);
+    setIsSearchOpen(true);
+    const timer = setTimeout(async () => {
+      try {
+        const results = await searchAccountsGlobally(query);
+        const filtered = (results || []).filter(
+          u => u.username.toLowerCase() !== currentUser.username.toLowerCase()
+        );
+        setSearchResults(filtered);
+      } catch (err) {
+        console.error('Search error:', err);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }, [addFriendInput, currentUser?.username]);
+
+  // Click outside listener to dismiss search results
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
+        setIsSearchOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   // Send a friend request
-  const handleSendFriendRequest = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const cleanHandle = addFriendInput.replace(/^@/, '').trim();
+  const handleSendFriendRequest = async (e?: React.FormEvent, targetUsername?: string) => {
+    if (e) e.preventDefault();
+    const cleanHandle = (targetUsername || addFriendInput).replace(/^@/, '').trim();
     if (!cleanHandle) return;
 
+    setIsSearchOpen(false);
     const res = await sendFriendRequestAction(cleanHandle);
     if (res.success) {
       setRequestFeedback({
@@ -141,6 +187,7 @@ export const FriendsMessenger: React.FC = () => {
         message: `Friend request sent to @${cleanHandle}!`,
       });
       setAddFriendInput('');
+      setSearchResults([]);
     } else {
       setRequestFeedback({
         success: false,
@@ -346,33 +393,139 @@ export const FriendsMessenger: React.FC = () => {
             ) : null}
           </button>
 
-          {/* Add Friend Form */}
-          <form onSubmit={handleSendFriendRequest} className="flex items-center gap-2">
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 font-mono-code text-xs text-[#ff6b00]">
-                @
-              </span>
-              <input
-                type="text"
-                placeholder="username (e.g. daddy)"
-                value={addFriendInput}
-                onChange={e => setAddFriendInput(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
-                aria-label="Add friend by username handle"
-                className={`w-48 sm:w-56 rounded-lg border py-2 pl-7 pr-3 font-mono-code text-xs focus:border-[#ff6b00] focus:outline-none transition-colors ${
+          {/* Add Friend Form with Live Global Search Dropdown */}
+          <div ref={searchContainerRef} className="relative">
+            <form onSubmit={handleSendFriendRequest} className="flex items-center gap-2">
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 font-mono-code text-xs text-[#ff6b00]">
+                  @
+                </span>
+                <input
+                  type="text"
+                  placeholder="username (e.g. daddy)"
+                  value={addFriendInput}
+                  onFocus={() => {
+                    if (addFriendInput.trim().length > 0) setIsSearchOpen(true);
+                  }}
+                  onChange={e => {
+                    setAddFriendInput(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''));
+                    setIsSearchOpen(true);
+                  }}
+                  aria-label="Add friend by username handle"
+                  className={`w-48 sm:w-56 rounded-lg border py-2 pl-7 pr-3 font-mono-code text-xs focus:border-[#ff6b00] focus:outline-none transition-colors ${
+                    isLight
+                      ? 'bg-white border-amber-300 text-stone-900'
+                      : 'bg-[#160d09] border-orange-500/30 text-white placeholder:text-neutral-500'
+                  }`}
+                />
+              </div>
+              <button
+                type="submit"
+                className="flex items-center gap-1.5 rounded-lg bg-[#ff6b00] px-5 py-2 font-sans text-xs font-bold text-black hover:bg-[#ff7d1f] transition-all shadow-md shadow-orange-950/40 cursor-pointer"
+              >
+                <UserPlus className="h-3.5 w-3.5 stroke-[2.5]" />
+                <span>Add Friend</span>
+              </button>
+            </form>
+
+            {/* Global Search Results Dropdown */}
+            {isSearchOpen && addFriendInput.trim().length > 0 && (
+              <div
+                className={`absolute right-0 top-full mt-2 w-72 sm:w-80 rounded-xl border p-2 shadow-2xl z-50 animate-in fade-in transition-all ${
                   isLight
-                    ? 'bg-white border-amber-300 text-stone-900'
-                    : 'bg-[#160d09] border-orange-500/30 text-white placeholder:text-neutral-500'
+                    ? 'bg-white border-amber-300 text-stone-900 shadow-orange-500/10'
+                    : 'bg-[#1a0f0a] border-orange-500/40 text-white shadow-2xl shadow-black/80'
                 }`}
-              />
-            </div>
-            <button
-              type="submit"
-              className="flex items-center gap-1.5 rounded-lg bg-[#ff6b00] px-5 py-2 font-sans text-xs font-bold text-black hover:bg-[#ff7d1f] transition-all shadow-md shadow-orange-950/40 cursor-pointer"
-            >
-              <UserPlus className="h-3.5 w-3.5 stroke-[2.5]" />
-              <span>Add Friend</span>
-            </button>
-          </form>
+              >
+                <div className="flex items-center justify-between px-2 py-1.5 border-b border-orange-500/20 font-mono-code text-[10px] text-orange-400 font-semibold uppercase tracking-wider">
+                  <span>Global Directory Search</span>
+                  {isSearching && <span className="animate-pulse text-[#ff6b00]">Searching...</span>}
+                </div>
+
+                <div className="max-h-56 overflow-y-auto divide-y divide-orange-500/10 py-1">
+                  {searchResults.length > 0 ? (
+                    searchResults.map(u => {
+                      const isFriend = (currentUser.friends || []).map(f => f.toLowerCase()).includes(u.username.toLowerCase());
+                      const isPendingSent = pendingSent.some(r => r.toUsername.toLowerCase() === u.username.toLowerCase());
+                      const isPendingIncoming = pendingIncoming.some(r => r.fromUsername.toLowerCase() === u.username.toLowerCase());
+
+                      return (
+                        <div
+                          key={u.id}
+                          className={`flex items-center justify-between p-2 rounded-lg transition-colors ${
+                            isLight ? 'hover:bg-amber-50' : 'hover:bg-[#25140d]'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 min-w-0 mr-2">
+                            <img
+                              src={u.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80'}
+                              alt={u.username}
+                              className="h-7 w-7 rounded-full object-cover ring-1 ring-orange-500/40 shrink-0"
+                            />
+                            <div className="min-w-0">
+                              <p className="font-mono-code text-xs font-semibold truncate text-[#ff6b00]">
+                                @{u.username}
+                              </p>
+                              <p className={`text-[10px] truncate ${isLight ? 'text-stone-500' : 'text-neutral-400'}`}>
+                                {u.location || u.bio || 'Creator'}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="shrink-0">
+                            {isFriend ? (
+                              <span className="font-mono-code text-[10px] font-semibold text-emerald-500 px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20">
+                                ✓ Friend
+                              </span>
+                            ) : isPendingSent ? (
+                              <span className="font-mono-code text-[10px] font-semibold text-orange-400 px-2 py-0.5 rounded bg-orange-500/10 border border-orange-500/20">
+                                ⏳ Pending
+                              </span>
+                            ) : isPendingIncoming ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const req = pendingIncoming.find(r => r.fromUsername.toLowerCase() === u.username.toLowerCase());
+                                  if (req) acceptFriendRequestAction(req.id);
+                                  setIsSearchOpen(false);
+                                }}
+                                className="rounded bg-emerald-600 px-2 py-0.5 font-sans text-[10px] font-bold text-white hover:bg-emerald-500 shadow-sm"
+                              >
+                                Accept
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleSendFriendRequest(undefined, u.username)}
+                                className="rounded bg-[#ff6b00] px-2.5 py-1 font-sans text-[10px] font-bold text-black hover:bg-[#ff7d1f] shadow-sm transition-transform active:scale-95"
+                              >
+                                + Add
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : isSearching ? (
+                    <div className="p-4 text-center font-mono-code text-xs opacity-60">
+                      Searching cloud database for "@{addFriendInput}"...
+                    </div>
+                  ) : (
+                    <div className="p-3 text-center font-mono-code text-[11px] opacity-70">
+                      <p>No user found for "@{addFriendInput}"</p>
+                      <button
+                        type="button"
+                        onClick={() => handleSendFriendRequest(undefined, addFriendInput)}
+                        className="mt-1.5 text-xs text-[#ff6b00] hover:underline block mx-auto font-semibold"
+                      >
+                        Send request to @{addFriendInput} anyway →
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -595,7 +748,7 @@ export const FriendsMessenger: React.FC = () => {
             </div>
           </div>
 
-          {/* Left Sidebar Footer: Dusk Mode with v1.28 immediately next to it */}
+          {/* Left Sidebar Footer: Dusk Mode with v1.0 version badge */}
           <div
             className={`p-3 border-t flex items-center justify-between font-mono-code text-xs transition-colors ${
               isLight ? 'border-amber-200 bg-amber-50/70' : 'border-orange-500/15 bg-[#100805]'
@@ -614,7 +767,7 @@ export const FriendsMessenger: React.FC = () => {
               <Sun className="h-3.5 w-3.5 text-amber-400" />
               <span className="font-semibold text-xs">Dusk Mode</span>
               <span className="font-mono-code text-[11px] font-bold text-[#ff6b00] px-1.5 py-0.5 rounded bg-orange-500/15 border border-orange-500/30">
-                v1.28
+                v{APP_VERSION}
               </span>
             </button>
             <span className="text-[10px] opacity-60 font-mono-code">Noir Vault</span>

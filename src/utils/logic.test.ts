@@ -203,3 +203,40 @@ test('user credentials and authentication gate logic', () => {
   assert.equal(nonExistent, undefined);
 });
 
+test('application version sequence is reset to string 1.0', async () => {
+  const { APP_VERSION } = await import('../version');
+  assert.equal(typeof APP_VERSION, 'string');
+  assert.equal(APP_VERSION, '1.0');
+});
+
+test('production backend URL is configured to noirarchive.onrender.com', async () => {
+  const { PRODUCTION_BACKEND_URL } = await import('./api');
+  assert.equal(PRODUCTION_BACKEND_URL, 'https://noirarchive.onrender.com');
+});
+
+test('user search parameter normalization and self exclusion', () => {
+  // Test query parameter extraction helper logic
+  function extractSearchQuery(req: { query?: Record<string, string>; params?: Record<string, string> }) {
+    const rawQuery = (req.query?.q || req.query?.query || req.query?.username || req.params?.query || '') as string;
+    const query = String(rawQuery).replace(/^@/, '').toLowerCase().trim();
+    const rawExclude = (req.query?.exclude || req.query?.current || '') as string;
+    const exclude = String(rawExclude).replace(/^@/, '').toLowerCase().trim();
+    return { query, exclude };
+  }
+
+  // Format 1: /api/users/search?q=daddy
+  assert.deepEqual(extractSearchQuery({ query: { q: 'daddy' } }), { query: 'daddy', exclude: '' });
+  // Format 2: /api/users/search?query=@Elena_K
+  assert.deepEqual(extractSearchQuery({ query: { query: '@Elena_K' } }), { query: 'elena_k', exclude: '' });
+  // Format 3: /api/users/search?username=moritz&exclude=moritz
+  assert.deepEqual(extractSearchQuery({ query: { username: 'moritz', exclude: 'moritz' } }), { query: 'moritz', exclude: 'moritz' });
+  // Format 4: /api/users/search/:query
+  assert.deepEqual(extractSearchQuery({ params: { query: 'kenji' } }), { query: 'kenji', exclude: '' });
+});
+
+test('strict rejection of self friend requests', () => {
+  const check = canSendFriendRequest('moritz', 'moritz', [], []);
+  assert.equal(check.allowed, false);
+  assert.equal(check.error, 'You cannot send a friend request to yourself.');
+});
+

@@ -32,6 +32,7 @@ import {
   DEFAULT_SUPABASE_URL,
   UserDTO,
 } from './src/server/supabase.js';
+import { APP_VERSION } from './src/version.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -235,7 +236,7 @@ async function startServer() {
     const currentStatus = isSupabaseConfigured() ? await testSupabaseConnection() : { connected: false, message: 'SUPABASE_SERVICE_ROLE_KEY not set' };
     res.json({
       status: 'ok',
-      version: '1.28',
+      version: APP_VERSION,
       database: isSupabaseConfigured() && currentStatus.connected ? 'supabase_postgres' : 'local_storage_fallback',
       supabaseProjectRef: SUPABASE_PROJECT_REF,
       supabaseUrl: DEFAULT_SUPABASE_URL,
@@ -261,31 +262,51 @@ async function startServer() {
     res.json(store.users.map(sanitizeUser));
   });
 
-  // Global search for user accounts by username handle, bio or location
-  app.get('/api/users/search/:query', async (req, res) => {
-    const query = req.params.query.toLowerCase().trim();
+  // User search handler supporting:
+  // - /api/users/search?q=... or ?query=... or ?username=...
+  // - /api/users/search/:query
+  // - Optional ?exclude=... or ?current=... to omit the current user
+  async function handleUserSearch(req: express.Request, res: express.Response) {
+    const rawQuery = (req.query.q || req.query.query || req.query.username || req.params.query || '') as string;
+    const query = String(rawQuery).replace(/^@/, '').toLowerCase().trim();
+    const rawExclude = (req.query.exclude || req.query.current || '') as string;
+    const exclude = String(rawExclude).replace(/^@/, '').toLowerCase().trim();
+
+    let matches: (User | UserDTO)[] = [];
+
     if (isSupabaseConfigured()) {
-      const matches = await searchSupabaseUsers(query);
-      return res.json(matches.map(sanitizeUser));
+      matches = query ? await searchSupabaseUsers(query) : await getSupabaseUsers();
+    } else {
+      if (!query) {
+        matches = store.users;
+      } else {
+        matches = store.users.filter(
+          u =>
+            u.username.toLowerCase().includes(query) ||
+            (u.bio && u.bio.toLowerCase().includes(query)) ||
+            (u.location && u.location.toLowerCase().includes(query))
+        );
+      }
     }
 
-    if (!query) {
-      return res.json(store.users.map(sanitizeUser));
+    if (exclude) {
+      matches = matches.filter(u => u.username.toLowerCase() !== exclude);
     }
-    const matches = store.users
-      .filter(
-        u =>
-          u.username.toLowerCase().includes(query) ||
-          (u.bio && u.bio.toLowerCase().includes(query)) ||
-          (u.location && u.location.toLowerCase().includes(query))
-      )
-      .map(sanitizeUser);
-    res.json(matches);
-  });
+
+    return res.json(matches.map(sanitizeUser));
+  }
+
+  // Both search route formats supported
+  app.get('/api/users/search', handleUserSearch);
+  app.get('/api/users/search/:query', handleUserSearch);
 
   // Get single user by username
   app.get('/api/users/:username', async (req, res) => {
     const username = req.params.username.replace(/^@/, '').toLowerCase().trim();
+    if (username === 'search') {
+      return handleUserSearch(req, res);
+    }
+
     if (isSupabaseConfigured()) {
       const user = await getSupabaseUserByUsername(username);
       if (user) {

@@ -154,18 +154,18 @@ ipcMain.handle('get-app-paths', () => {
 const backendConfigFile = path.join(appUserData, 'backend-config.json');
 
 function getStoredBackendUrl() {
-  if (process.env.NOIR_BACKEND_URL) {
+  if (process.env.NOIR_BACKEND_URL && process.env.NOIR_BACKEND_URL.trim()) {
     return process.env.NOIR_BACKEND_URL.trim();
   }
   try {
     if (fs.existsSync(backendConfigFile)) {
       const cfg = JSON.parse(fs.readFileSync(backendConfigFile, 'utf-8'));
-      if (cfg.backendUrl) return cfg.backendUrl.trim();
+      if (cfg.backendUrl && cfg.backendUrl.trim()) return cfg.backendUrl.trim();
     }
   } catch {
     // ignore
   }
-  return '';
+  return 'https://noirarchive.onrender.com';
 }
 
 function saveStoredBackendUrl(url) {
