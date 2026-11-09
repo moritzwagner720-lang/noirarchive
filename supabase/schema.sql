@@ -92,6 +92,22 @@ CREATE TABLE IF NOT EXISTS public.published_packages (
 
 CREATE INDEX IF NOT EXISTS idx_published_created ON public.published_packages (created_at DESC);
 
+-- 1.6 FRIEND GROUPS TABLE
+CREATE TABLE IF NOT EXISTS public.friend_groups (
+  id TEXT PRIMARY KEY,
+  owner_username TEXT NOT NULL,
+  name TEXT NOT NULL,
+  member_usernames TEXT[] DEFAULT '{}'::TEXT[],
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_friend_groups_owner ON public.friend_groups (LOWER(owner_username));
+
+-- User settings columns
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS selected_theme TEXT DEFAULT 'graphite';
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS group_privacy TEXT DEFAULT 'friends';
+
 -- ========================================================================
 -- 2. ROW LEVEL SECURITY (RLS) & ACCESS CONTROL
 -- ========================================================================

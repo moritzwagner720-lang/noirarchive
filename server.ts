@@ -12,6 +12,11 @@ import {
   createSupabaseUser,
   updateSupabaseUserAvatar,
   updateSupabaseUserFriends,
+  updateSupabaseUserSettings,
+  getSupabaseGroups,
+  createSupabaseGroup,
+  updateSupabaseGroup,
+  deleteSupabaseGroup,
   getSupabaseFriendRequests,
   createSupabaseFriendRequest,
   updateSupabaseFriendRequestStatus,
@@ -31,6 +36,7 @@ import {
   SUPABASE_PROJECT_REF,
   DEFAULT_SUPABASE_URL,
   UserDTO,
+  FriendGroupDTO,
 } from './src/server/supabase.js';
 import { APP_VERSION } from './src/version.js';
 
@@ -53,12 +59,28 @@ function hashPassword(password: string): string {
 export interface User {
   id: string;
   username: string;
+  displayName?: string;
   bio?: string;
   avatar: string;
+  customAvatar?: string;
   location?: string;
   passwordHash: string;
   createdAt: string;
   friends: string[];
+  selectedTheme?: string;
+  groupPrivacy?: 'everyone' | 'friends' | 'nobody';
+  settings?: any;
+  favoritePackageIds?: string[];
+  activeSessions?: any[];
+}
+
+export interface FriendGroup {
+  id: string;
+  ownerUsername: string;
+  name: string;
+  memberUsernames: string[];
+  createdAt: string;
+  updatedAt?: string;
 }
 
 interface StoreData {
@@ -67,48 +89,102 @@ interface StoreData {
   chatMessages: any[];
   transfers: any[];
   publishedPackages: any[];
+  groups: FriendGroup[];
+  reports?: any[];
 }
 
 const DEFAULT_USERS: User[] = [
   {
     id: 'user-moritz',
     username: 'moritz',
-    bio: 'Architectural and minimalist street photography. Exploring geometric tension, concrete textures, and natural contrast.',
-    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80',
+    displayName: 'Moritz',
+    bio: 'Software engineer and file sharing enthusiast. Sending project archives and developer packages.',
+    avatar: '',
     location: 'Berlin',
     passwordHash: hashPassword('password123'),
     createdAt: '2024-01-15T10:00:00.000Z',
     friends: ['elena_k', 'kenji_mono'],
+    selectedTheme: 'graphite',
+    groupPrivacy: 'friends',
+    settings: {
+      matureContentFilter: 'warn',
+      publicVisibility: 'everyone',
+      defaultExpiryDays: 7,
+      notificationSounds: true,
+      seasonalEffectsEnabled: true,
+      language: 'en',
+    },
+    favoritePackageIds: [],
+    activeSessions: [
+      { id: 'sess-1', client: 'Chrome 124 (macOS)', ip: '192.168.1.10', lastActive: 'Just now', current: true },
+      { id: 'sess-2', client: 'Noir Archive Desktop v1.0', ip: '192.168.1.15', lastActive: '2 hours ago' },
+    ],
   },
   {
     id: 'user-elena',
     username: 'elena_k',
-    bio: 'Monochrome portraiture, sculptural fashion, and darkroom chiaroscuro.',
-    avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=400&q=80',
+    displayName: 'Elena K.',
+    bio: 'Product designer and multimedia collaborator. Sharing asset libraries and design folders.',
+    avatar: '',
     location: 'Paris',
     passwordHash: hashPassword('secret456'),
     createdAt: '2024-02-01T12:00:00.000Z',
     friends: ['moritz'],
+    selectedTheme: 'graphite',
+    groupPrivacy: 'friends',
+    settings: {
+      matureContentFilter: 'warn',
+      publicVisibility: 'everyone',
+      defaultExpiryDays: 14,
+      notificationSounds: true,
+      seasonalEffectsEnabled: true,
+      language: 'en',
+    },
+    favoritePackageIds: [],
   },
   {
     id: 'user-kenji',
     username: 'kenji_mono',
-    bio: 'Nocturnal street observer. Capturing midnight rain, subway shadows, and solitary moments across Tokyo.',
-    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80',
+    displayName: 'Kenji Mono',
+    bio: 'System architect. Exchanging encrypted datasets and engineering build bundles.',
+    avatar: '',
     location: 'Tokyo',
     passwordHash: hashPassword('mono789'),
     createdAt: '2024-03-10T09:30:00.000Z',
     friends: ['moritz'],
+    selectedTheme: 'graphite',
+    groupPrivacy: 'friends',
+    settings: {
+      matureContentFilter: 'warn',
+      publicVisibility: 'everyone',
+      defaultExpiryDays: 30,
+      notificationSounds: false,
+      seasonalEffectsEnabled: true,
+      language: 'en',
+    },
+    favoritePackageIds: [],
   },
   {
     id: 'user-daddy',
     username: 'daddy',
-    bio: 'Visual artist and photographer.',
-    avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=400&q=80',
+    displayName: 'Daddy',
+    bio: 'Verified member & archive curator.',
+    avatar: '',
     location: 'Berlin',
     passwordHash: hashPassword('password123'),
     createdAt: '2024-04-01T09:30:00.000Z',
     friends: [],
+    selectedTheme: 'graphite',
+    groupPrivacy: 'friends',
+    settings: {
+      matureContentFilter: 'warn',
+      publicVisibility: 'everyone',
+      defaultExpiryDays: 7,
+      notificationSounds: true,
+      seasonalEffectsEnabled: true,
+      language: 'en',
+    },
+    favoritePackageIds: [],
   },
 ];
 
@@ -119,13 +195,30 @@ function loadStore(): StoreData {
       const data = JSON.parse(content);
       const userMap = new Map<string, User>();
       DEFAULT_USERS.forEach(u => userMap.set(u.username.toLowerCase(), u));
-      (data.users || []).forEach((u: User) => userMap.set(u.username.toLowerCase(), u));
+      (data.users || []).forEach((u: User) => {
+        const def = userMap.get(u.username.toLowerCase());
+        userMap.set(u.username.toLowerCase(), {
+          ...def,
+          ...u,
+          avatar: '', // Purge any legacy human photo URLs
+          customAvatar: u.customAvatar || def?.customAvatar || undefined,
+          displayName: u.displayName || def?.displayName || u.username,
+          selectedTheme: u.selectedTheme || def?.selectedTheme || 'graphite',
+          groupPrivacy: u.groupPrivacy || def?.groupPrivacy || 'friends',
+          settings: { ...(def?.settings || {}), ...(u.settings || {}) },
+          favoritePackageIds: Array.isArray(u.favoritePackageIds) ? u.favoritePackageIds : (def?.favoritePackageIds || []),
+          activeSessions: Array.isArray(u.activeSessions) ? u.activeSessions : (def?.activeSessions || []),
+        });
+      });
       data.users = Array.from(userMap.values());
+      data.groups = Array.isArray(data.groups) ? data.groups : [];
+      data.reports = Array.isArray(data.reports) ? data.reports : [];
       return data;
     }
   } catch (err) {
     console.error('Error reading store file:', err);
   }
+
 
   const initialStore: StoreData = {
     users: [...DEFAULT_USERS],
@@ -133,6 +226,7 @@ function loadStore(): StoreData {
     chatMessages: [],
     transfers: [],
     publishedPackages: [],
+    groups: [],
   };
   saveStore(initialStore);
   return initialStore;
@@ -350,9 +444,86 @@ async function startServer() {
     res.json({ success: true, user: sanitizeUser(user) });
   });
 
+  // Update user settings (Theme, Privacy, Bio, Location, Custom Avatar, Preferences)
+  app.put('/api/users/:username/settings', async (req, res) => {
+    const username = req.params.username.replace(/^@/, '').toLowerCase().trim();
+    const { selectedTheme, groupPrivacy, bio, location, displayName, customAvatar, settings, favoritePackageIds } = req.body;
+
+    let updatedUser: User | null = null;
+    const idx = store.users.findIndex(u => u.username.toLowerCase() === username);
+    if (idx >= 0) {
+      if (selectedTheme) store.users[idx].selectedTheme = selectedTheme;
+      if (groupPrivacy) store.users[idx].groupPrivacy = groupPrivacy;
+      if (bio !== undefined) store.users[idx].bio = bio;
+      if (location !== undefined) store.users[idx].location = location;
+      if (displayName !== undefined) store.users[idx].displayName = displayName;
+      if (customAvatar !== undefined) store.users[idx].customAvatar = customAvatar || undefined;
+      if (settings !== undefined) {
+        store.users[idx].settings = { ...(store.users[idx].settings || {}), ...settings };
+      }
+      if (Array.isArray(favoritePackageIds)) {
+        store.users[idx].favoritePackageIds = favoritePackageIds;
+      }
+      updatedUser = store.users[idx];
+      saveStore(store);
+    }
+
+    if (isSupabaseConfigured()) {
+      try {
+        await updateSupabaseUserSettings(username, {
+          selectedTheme,
+          groupPrivacy,
+          bio,
+          location,
+          displayName,
+          customAvatar,
+          settings,
+          favoritePackageIds,
+        });
+      } catch {}
+    }
+
+    if (!updatedUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    broadcast('user_updated', sanitizeUser(updatedUser));
+    res.json({ success: true, user: sanitizeUser(updatedUser) });
+  });
+
+  // Change Password endpoint
+  app.put('/api/users/:username/password', async (req, res) => {
+    const username = req.params.username.replace(/^@/, '').toLowerCase().trim();
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Current password and new password are required' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'New password must be at least 6 characters' });
+    }
+
+    const idx = store.users.findIndex(u => u.username.toLowerCase() === username);
+    if (idx < 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const user = store.users[idx];
+    if (user.passwordHash !== hashPassword(currentPassword)) {
+      return res.status(401).json({ error: 'Current password is incorrect' });
+    }
+
+    user.passwordHash = hashPassword(newPassword);
+    saveStore(store);
+
+    res.json({ success: true, message: 'Password updated successfully' });
+  });
+
+
   // User Sign Up
   app.post('/api/auth/signup', async (req, res) => {
-    const { username, password, bio, avatar, location } = req.body;
+    const { username, password, bio, location, selectedTheme, groupPrivacy } = req.body;
     if (!username || !password) {
       return res.status(400).json({ error: 'Username and password are required' });
     }
@@ -377,14 +548,14 @@ async function startServer() {
     const newUser: User = {
       id: `user-${Date.now()}`,
       username: cleanUsername,
-      bio: bio?.trim() || 'Visual artist and photographer.',
-      avatar:
-        avatar?.trim() ||
-        'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80',
+      bio: bio?.trim() || 'Noir Archive file sharing member.',
+      avatar: '', // Strict letter-based avatars: no human photos
       location: location?.trim() || 'Worldwide',
       passwordHash: hashPassword(password),
       createdAt: new Date().toISOString(),
       friends: [],
+      selectedTheme: selectedTheme || 'graphite',
+      groupPrivacy: groupPrivacy || 'friends',
     };
 
     if (isSupabaseConfigured()) {
@@ -613,6 +784,179 @@ async function startServer() {
     res.json({ success: true });
   });
 
+  // --- FRIEND GROUPS ---
+  // Get groups for a user
+  app.get('/api/groups', async (req, res) => {
+    const user = req.query.user as string;
+    const clean = user ? user.replace(/^@/, '').toLowerCase().trim() : '';
+
+    let groups: FriendGroup[] = [];
+    if (isSupabaseConfigured()) {
+      groups = await getSupabaseGroups(clean);
+    }
+    if (groups.length === 0 && store.groups) {
+      if (clean) {
+        groups = store.groups.filter(
+          g => g.ownerUsername.toLowerCase() === clean || g.memberUsernames.map(m => m.toLowerCase()).includes(clean)
+        );
+      } else {
+        groups = store.groups;
+      }
+    }
+
+    res.json(groups || []);
+  });
+
+  // Create Group
+  app.post('/api/groups', async (req, res) => {
+    const { name, ownerUsername, members } = req.body;
+    if (!name || !name.trim() || !ownerUsername) {
+      return res.status(400).json({ error: 'Group name and owner username are required' });
+    }
+
+    const cleanOwner = ownerUsername.replace(/^@/, '').toLowerCase().trim();
+    const initialMembers: string[] = Array.isArray(members)
+      ? Array.from(new Set([cleanOwner, ...members.map((m: string) => m.replace(/^@/, '').toLowerCase().trim())]))
+      : [cleanOwner];
+
+    const newGroup: FriendGroup = {
+      id: `grp-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      ownerUsername: cleanOwner,
+      name: name.trim(),
+      memberUsernames: initialMembers,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (isSupabaseConfigured()) {
+      await createSupabaseGroup(newGroup).catch(() => {});
+    }
+
+    store.groups = store.groups || [];
+    store.groups.unshift(newGroup);
+    saveStore(store);
+
+    broadcast('group_created', newGroup);
+    res.json({ success: true, group: newGroup });
+  });
+
+  // Rename / Update Group
+  app.put('/api/groups/:id', async (req, res) => {
+    const { id } = req.params;
+    const { name } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: 'Group name is required' });
+    }
+
+    const group = (store.groups || []).find(g => g.id === id);
+    if (!group) {
+      return res.status(404).json({ error: 'Group not found' });
+    }
+
+    group.name = name.trim();
+    group.updatedAt = new Date().toISOString();
+
+    if (isSupabaseConfigured()) {
+      await updateSupabaseGroup(group).catch(() => {});
+    }
+
+    saveStore(store);
+    broadcast('group_updated', group);
+    res.json({ success: true, group });
+  });
+
+  // Delete Group
+  app.delete('/api/groups/:id', async (req, res) => {
+    const { id } = req.params;
+    store.groups = (store.groups || []).filter(g => g.id !== id);
+
+    if (isSupabaseConfigured()) {
+      await deleteSupabaseGroup(id).catch(() => {});
+    }
+
+    saveStore(store);
+    broadcast('group_deleted', { id });
+    res.json({ success: true, id });
+  });
+
+  // Add Member to Group (WITH STRICT PRIVACY CHECK)
+  app.post('/api/groups/:id/members', async (req, res) => {
+    const { id } = req.params;
+    const { username, adderUsername } = req.body;
+    if (!username) {
+      return res.status(400).json({ error: 'Username is required' });
+    }
+
+    const cleanTarget = username.replace(/^@/, '').toLowerCase().trim();
+    const cleanAdder = (adderUsername || '').replace(/^@/, '').toLowerCase().trim();
+
+    const group = (store.groups || []).find(g => g.id === id);
+    if (!group) {
+      return res.status(404).json({ error: 'Group not found' });
+    }
+
+    // Lookup target user to verify existence & privacy settings
+    let targetUser = store.users.find(u => u.username.toLowerCase() === cleanTarget);
+    if (!targetUser && isSupabaseConfigured()) {
+      targetUser = (await getSupabaseUserByUsername(cleanTarget)) || undefined;
+    }
+
+    if (!targetUser) {
+      return res.status(404).json({ error: `User @${cleanTarget} does not exist.` });
+    }
+
+    // Group Invitation Privacy Setting check
+    const privacy = targetUser.groupPrivacy || 'friends';
+    if (privacy === 'nobody' && cleanAdder !== cleanTarget) {
+      return res.status(403).json({ error: `@${targetUser.username} does not allow anyone to add them to groups.` });
+    }
+
+    if (privacy === 'friends' && cleanAdder !== cleanTarget) {
+      const isFriend = (targetUser.friends || []).some(
+        f => f.replace(/^@/, '').toLowerCase().trim() === cleanAdder
+      );
+      if (!isFriend) {
+        return res.status(403).json({ error: `@${targetUser.username} only allows friends to add them to groups.` });
+      }
+    }
+
+    if (!group.memberUsernames.map(m => m.toLowerCase()).includes(cleanTarget)) {
+      group.memberUsernames.push(cleanTarget);
+      group.updatedAt = new Date().toISOString();
+
+      if (isSupabaseConfigured()) {
+        await updateSupabaseGroup(group).catch(() => {});
+      }
+
+      saveStore(store);
+      broadcast('group_updated', group);
+    }
+
+    res.json({ success: true, group });
+  });
+
+  // Remove Member from Group
+  app.delete('/api/groups/:id/members/:username', async (req, res) => {
+    const { id, username } = req.params;
+    const cleanMember = username.replace(/^@/, '').toLowerCase().trim();
+
+    const group = (store.groups || []).find(g => g.id === id);
+    if (!group) {
+      return res.status(404).json({ error: 'Group not found' });
+    }
+
+    group.memberUsernames = group.memberUsernames.filter(m => m.toLowerCase() !== cleanMember);
+    group.updatedAt = new Date().toISOString();
+
+    if (isSupabaseConfigured()) {
+      await updateSupabaseGroup(group).catch(() => {});
+    }
+
+    saveStore(store);
+    broadcast('group_updated', group);
+    res.json({ success: true, group });
+  });
+
   // Chat Messages - Get
   app.get('/api/chat-messages', async (req, res) => {
     const { user1, user2 } = req.query as { user1?: string; user2?: string };
@@ -708,19 +1052,53 @@ async function startServer() {
   // Transfers - Download Counter
   app.post('/api/transfers/:id/download', async (req, res) => {
     const { id } = req.params;
-    let downloadsCount = 1;
+    const t = store.transfers.find(item => item.id === id);
+
+    if (t && t.downloadLimit && t.downloadsCount >= t.downloadLimit) {
+      return res.status(403).json({ error: `This transfer has reached its maximum download limit of ${t.downloadLimit}.` });
+    }
+
+    let downloadsCount = (t?.downloadsCount || 0) + 1;
 
     if (isSupabaseConfigured()) {
       downloadsCount = await incrementSupabaseTransferDownload(id);
     }
 
-    const t = store.transfers.find(item => item.id === id);
     if (t) {
       t.downloadsCount = downloadsCount;
       saveStore(store);
     }
     broadcast('transfer_downloaded', { id, downloadsCount });
     res.json({ success: true, downloadsCount });
+  });
+
+  // Transfers - Toggle Favorite
+  app.post('/api/transfers/:id/favorite', async (req, res) => {
+    const { id } = req.params;
+    const { username } = req.body;
+    const t = store.transfers.find(item => item.id === id);
+    if (!t) {
+      return res.status(404).json({ error: 'Transfer not found' });
+    }
+
+    t.isFavorite = !t.isFavorite;
+    saveStore(store);
+
+    if (username) {
+      const u = store.users.find(user => user.username.toLowerCase() === username.toLowerCase());
+      if (u) {
+        u.favoritePackageIds = u.favoritePackageIds || [];
+        if (t.isFavorite) {
+          if (!u.favoritePackageIds.includes(id)) u.favoritePackageIds.push(id);
+        } else {
+          u.favoritePackageIds = u.favoritePackageIds.filter(favId => favId !== id);
+        }
+        saveStore(store);
+      }
+    }
+
+    broadcast('transfer_favorited', { id, isFavorite: t.isFavorite });
+    res.json({ success: true, isFavorite: t.isFavorite });
   });
 
   // Transfers - Revoke Access
@@ -797,6 +1175,83 @@ async function startServer() {
     res.json({ success: true, package: pkg });
   });
 
+  // Published Packages - Edit / Update
+  app.put('/api/published/:id', async (req, res) => {
+    const { id } = req.params;
+    const updates = req.body;
+
+    const idx = store.publishedPackages.findIndex(p => p.id === id);
+    if (idx < 0) {
+      return res.status(404).json({ error: 'Published package not found' });
+    }
+
+    const current = store.publishedPackages[idx];
+    const updated = {
+      ...current,
+      ...updates,
+      id: current.id,
+      updatedAt: new Date().toISOString(),
+    };
+
+    store.publishedPackages[idx] = updated;
+
+    if (isSupabaseConfigured()) {
+      await upsertSupabasePublished(updated).catch(() => {});
+    }
+
+    saveStore(store);
+    broadcast('published_updated', updated);
+    res.json({ success: true, package: updated });
+  });
+
+  // Published Packages - Delete
+  app.delete('/api/published/:id', async (req, res) => {
+    const { id } = req.params;
+    const pkg = store.publishedPackages.find(p => p.id === id);
+    if (!pkg) {
+      return res.status(404).json({ error: 'Published package not found' });
+    }
+
+    store.publishedPackages = store.publishedPackages.filter(p => p.id !== id);
+    saveStore(store);
+
+    broadcast('published_deleted', { id });
+    res.json({ success: true, id });
+  });
+
+  // Published Packages - Report
+  app.post('/api/published/:id/report', async (req, res) => {
+    const { id } = req.params;
+    const { reason, details, reportedBy } = req.body;
+
+    const pkg = store.publishedPackages.find(p => p.id === id);
+    if (!pkg) {
+      return res.status(404).json({ error: 'Published package not found' });
+    }
+
+    const reporter = reportedBy || 'anonymous';
+    pkg.reportedBy = pkg.reportedBy || [];
+    if (!pkg.reportedBy.includes(reporter)) {
+      pkg.reportedBy.push(reporter);
+      pkg.reportsCount = (pkg.reportsCount || 0) + 1;
+    }
+
+    store.reports = store.reports || [];
+    const newReport = {
+      id: `rep-${Date.now()}`,
+      packageId: id,
+      reportedBy: reporter,
+      reason: reason || 'inappropriate',
+      details: details || '',
+      createdAt: new Date().toISOString(),
+    };
+    store.reports.push(newReport);
+    saveStore(store);
+
+    broadcast('published_reported', { id, reportsCount: pkg.reportsCount });
+    res.json({ success: true, report: newReport });
+  });
+
   // Published Packages - Like
   app.post('/api/published/:id/like', async (req, res) => {
     const { id } = req.params;
@@ -836,16 +1291,21 @@ async function startServer() {
     res.json({ success: true, likesCount, likedBy });
   });
 
-  // Published Packages - Download Counter
+  // Published Packages - Download Counter (Enforcing downloadsEnabled)
   app.post('/api/published/:id/download', async (req, res) => {
     const { id } = req.params;
+    const pkg = store.publishedPackages.find(p => p.id === id);
+
+    if (pkg && pkg.downloadsEnabled === false) {
+      return res.status(403).json({ error: 'Downloads have been disabled for this publication by the author.' });
+    }
+
     let downloadsCount = 1;
 
     if (isSupabaseConfigured()) {
       downloadsCount = await incrementSupabasePublishedDownload(id);
     }
 
-    const pkg = store.publishedPackages.find(p => p.id === id);
     if (pkg) {
       pkg.downloadsCount = downloadsCount;
       saveStore(store);
@@ -853,6 +1313,7 @@ async function startServer() {
     broadcast('published_downloaded', { id, downloadsCount });
     res.json({ success: true, downloadsCount });
   });
+
 
   // --- VITE DEV SERVER OR STATIC PRODUCTION ---
   if (process.env.NODE_ENV === 'production' && fs.existsSync(path.resolve(__dirname, 'dist'))) {

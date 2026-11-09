@@ -51,15 +51,81 @@ export interface Project {
   clientName?: string;
 }
 
+export type GroupPrivacySetting = 'everyone' | 'friends' | 'nobody';
+
+export type ThemeId =
+  | 'graphite'
+  | 'midnight'
+  | 'arctic'
+  | 'purple'
+  | 'emerald'
+  | 'crimson'
+  | 'rose'
+  | 'ocean'
+  | 'amber'
+  | 'monochrome'
+  | 'christmas'
+  | 'halloween';
+
+export interface ThemeDefinition {
+  id: ThemeId;
+  name: string;
+  type: 'standard' | 'seasonal';
+  description: string;
+  accentHex: string;
+  accentHoverHex: string;
+  accentText: string;
+  bgBase: string;
+  bgSurface: string;
+  bgElevated: string;
+  borderColor: string;
+  previewColors: [string, string, string];
+}
+
+export interface FriendGroup {
+  id: string;
+  ownerUsername: string;
+  name: string;
+  memberUsernames: string[];
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface ActiveSession {
+  id: string;
+  client: string;
+  ip: string;
+  lastActive: string;
+  current?: boolean;
+}
+
+export interface UserSettings {
+  matureContentFilter?: 'show' | 'warn' | 'hide';
+  publicVisibility?: 'everyone' | 'users' | 'friends';
+  defaultExpiryDays?: number | null;
+  defaultRequirePassword?: boolean;
+  preferredDownloadMode?: 'zip' | 'individual';
+  notificationSounds?: boolean;
+  seasonalEffectsEnabled?: boolean;
+  language?: string;
+}
+
 export interface User {
   id: string;
   username: string;
+  displayName?: string;
   bio?: string;
-  avatar: string;
+  avatar?: string;
+  customAvatar?: string; // User-uploaded custom profile picture
   location?: string;
   passwordHash: string;
   createdAt: string;
   friends: string[]; // array of usernames
+  selectedTheme?: ThemeId;
+  groupPrivacy?: GroupPrivacySetting;
+  settings?: UserSettings;
+  favoritePackageIds?: string[];
+  activeSessions?: ActiveSession[];
 }
 
 export interface TransferFile {
@@ -85,17 +151,21 @@ export interface FileTransferPackage {
   senderUsername: string;
   title: string;
   note?: string;
-  recipientType: 'username' | 'direct-link' | 'email';
+  recipientType: 'username' | 'direct-link' | 'email' | 'group';
   recipientUsername?: string;
   recipientEmail?: string;
+  recipientGroupId?: string;
+  recipientGroupName?: string;
   hasPassword?: boolean;
   passwordHash?: string;
+  downloadLimit?: number | null; // e.g. 5, 10, or null for unlimited
   expiresAt: string | null; // ISO string or null
   downloadsCount: number;
   files: TransferFile[];
   createdAt: string;
   status: 'active' | 'expired' | 'revoked';
   reviews?: ClientReview[];
+  isFavorite?: boolean;
 }
 
 export interface FriendRequest {
@@ -136,7 +206,31 @@ export interface PublishedPackage {
   downloadsCount: number;
   likesCount: number;
   likedBy?: string[];
+  visibility?: 'public' | 'unlisted' | 'private';
+  downloadsEnabled?: boolean;
+  isMature?: boolean;
+  matureReason?: string;
+  reportsCount?: number;
+  reportedBy?: string[];
   createdAt: string;
+  updatedAt?: string;
+}
+
+export interface PublicationReport {
+  id: string;
+  packageId: string;
+  reportedBy: string;
+  reason: 'malware' | 'copyright' | 'inappropriate' | 'mature' | 'other';
+  details?: string;
+  createdAt: string;
+}
+
+export interface StorageStats {
+  usedBytes: number;
+  usedFormatted: string;
+  totalTransfers: number;
+  totalFiles: number;
+  quotaBytes: number;
 }
 
 export interface NoirDesktopBridge {

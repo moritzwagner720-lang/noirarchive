@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { PublishedPackage, TransferFile } from '../types';
 import { filterPublishedPackages } from '../utils/published';
+import { UserAvatar } from './UserAvatar';
 import {
   Download,
   Heart,
@@ -17,6 +18,7 @@ import {
   Share2,
   ExternalLink,
   Tag,
+  FileText,
 } from 'lucide-react';
 import JSZip from 'jszip';
 
@@ -28,7 +30,6 @@ export const PublishedFilesSection: React.FC = () => {
     setIsPublishModalOpen,
     currentUser,
     setAuthModal,
-    theme,
   } = useApp();
 
   const [activeCategory, setActiveCategory] = useState<string>('all');
@@ -37,8 +38,6 @@ export const PublishedFilesSection: React.FC = () => {
   const [inspectingPackage, setInspectingPackage] = useState<PublishedPackage | null>(null);
   const [downloadingZipId, setDownloadingZipId] = useState<string | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
-
-  const isLight = theme === 'light';
 
   // Filter & sort
   const displayed = filterPublishedPackages(
@@ -79,7 +78,7 @@ export const PublishedFilesSection: React.FC = () => {
       // Manifest file
       folder.file(
         'README_MANIFEST.txt',
-        `NOIR ARCHIVE PUBLIC DELIVERY\nTitle: ${pkg.title}\nPublished by: @${pkg.authorUsername}\nDescription: ${pkg.description}\nAssets: ${pkg.files.length}\nDate: ${pkg.createdAt}\nFree Public Download.\n`
+        `NOIR ARCHIVE PUBLIC DELIVERY\nTitle: ${pkg.title}\nPublished by: @${pkg.authorUsername}\nDescription: ${pkg.description}\nAssets: ${pkg.files.length}\nDate: ${pkg.createdAt}\nFree Direct Download.\n`
       );
 
       const content = await zip.generateAsync({ type: 'blob' });
@@ -117,30 +116,31 @@ export const PublishedFilesSection: React.FC = () => {
   };
 
   const categories = [
-    { id: 'all', label: 'All Files' },
-    { id: 'architecture', label: 'Architecture' },
-    { id: 'street', label: 'Street & Documentary' },
-    { id: 'portraiture', label: 'Portraiture' },
-    { id: 'nature', label: 'Nature' },
-    { id: 'bundles', label: 'Curated Bundles' },
+    { id: 'all', label: 'All Files & Folders' },
+    { id: 'bundles', label: 'Bundles & Archives' },
+    { id: 'architecture', label: 'Design & Assets' },
+    { id: 'street', label: 'Documents & Media' },
   ];
 
   return (
     <div className="py-8">
       {/* Header bar */}
-      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between border-b pb-6 transition-colors border-orange-500/15">
+      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between border-b pb-6 border-[#383a40]">
         <div>
           <div className="flex items-center gap-2">
-            <span className="flex h-2 w-2 rounded-full bg-[#ff6b00] shadow-sm shadow-orange-500/50" />
-            <span className="text-[11px] font-mono-code font-bold uppercase tracking-wider text-[#ff6b00]">
-              OPEN NOCTURNAL VAULT
+            <span
+              className="flex h-2 w-2 rounded-full"
+              style={{ backgroundColor: 'var(--color-accent, #5865f2)' }}
+            />
+            <span className="text-[11px] font-mono-code font-bold uppercase tracking-wider text-neutral-400">
+              SHARED COMMUNITY VAULT
             </span>
           </div>
-          <h1 className="mt-1 font-sans text-3xl font-extrabold tracking-tight">
-            Published Files & Community Downloads
+          <h1 className="mt-1 font-sans text-3xl font-extrabold tracking-tight text-white">
+            Shared Files & Public Archives
           </h1>
-          <p className={`mt-1 text-xs max-w-xl ${isLight ? 'text-stone-600' : 'text-neutral-400'}`}>
-            Explore collections and folders published by creators. Anyone can freely inspect, preview, and download full bundles or individual assets.
+          <p className="mt-1 text-xs max-w-xl text-neutral-400">
+            Explore public packages and folders shared by the Noir Archive community. Freely inspect, preview, and download full archives or individual files.
           </p>
         </div>
 
@@ -153,10 +153,11 @@ export const PublishedFilesSection: React.FC = () => {
               setIsPublishModalOpen(true);
             }
           }}
-          className="flex items-center gap-2 rounded-lg bg-[#ff6b00] px-5 py-2.5 text-xs font-bold text-black shadow-md shadow-orange-950/40 hover:bg-[#ff7d1f] hover:scale-[1.02] active:scale-[0.98] transition-all shrink-0"
+          className="flex items-center gap-2 rounded-xl px-5 py-2.5 text-xs font-bold text-white shadow-md hover:brightness-110 active:scale-[0.98] transition-all shrink-0"
+          style={{ backgroundColor: 'var(--color-accent, #5865f2)' }}
         >
           <Upload className="h-4 w-4 stroke-[2.5]" />
-          <span>Publish Your Files</span>
+          <span>Share to Public Vault</span>
         </button>
       </div>
 
@@ -170,13 +171,14 @@ export const PublishedFilesSection: React.FC = () => {
               <button
                 key={cat.id}
                 onClick={() => setActiveCategory(cat.id)}
-                className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                className={`px-4 py-1.5 rounded-xl text-xs font-semibold transition-all ${
                   isActive
-                    ? 'bg-[#ff6b00] text-black shadow-sm'
-                    : isLight
-                    ? 'bg-amber-100/70 text-stone-700 hover:bg-amber-200'
-                    : 'bg-[#180e0a] text-neutral-300 hover:text-white border border-orange-500/20'
+                    ? 'text-white shadow-sm'
+                    : 'bg-[#2b2d31] text-neutral-300 hover:text-white border border-[#383a40]'
                 }`}
+                style={{
+                  backgroundColor: isActive ? 'var(--color-accent, #5865f2)' : undefined,
+                }}
               >
                 {cat.label}
               </button>
@@ -187,29 +189,21 @@ export const PublishedFilesSection: React.FC = () => {
         {/* Search input and sort */}
         <div className="flex items-center gap-2">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-orange-400/60" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-neutral-400" />
             <input
               type="text"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              aria-label="Search published files"
+              aria-label="Search shared files"
               placeholder="Filter archives..."
-              className={`w-52 sm:w-64 rounded-lg border py-1.5 pl-8 pr-3 text-xs focus:border-[#ff6b00] focus:outline-none transition-colors ${
-                isLight
-                  ? 'bg-white border-amber-300 text-stone-900'
-                  : 'bg-[#160d09] border-orange-500/30 text-white placeholder:text-neutral-500'
-              }`}
+              className="w-52 sm:w-64 rounded-xl border py-1.5 pl-8 pr-3 text-xs bg-[#2b2d31] border-[#383a40] text-white placeholder:text-neutral-500 focus:outline-none focus:border-[var(--color-accent,#5865f2)] transition-colors"
             />
           </div>
 
           <select
             value={sortBy}
             onChange={e => setSortBy(e.target.value as any)}
-            className={`rounded-lg border py-1.5 px-3 text-xs font-mono-code focus:outline-none transition-colors ${
-              isLight
-                ? 'bg-white border-amber-300 text-stone-700'
-                : 'bg-[#160d09] border-orange-500/30 text-orange-200'
-            }`}
+            className="rounded-xl border py-1.5 px-3 text-xs font-mono-code bg-[#2b2d31] border-[#383a40] text-neutral-200 focus:outline-none"
           >
             <option value="latest">Latest</option>
             <option value="downloads">Most Downloaded</option>
@@ -220,17 +214,16 @@ export const PublishedFilesSection: React.FC = () => {
 
       {/* Grid of Published Packages */}
       {publishedPackages.length === 0 ? (
-        <div
-          className={`py-20 px-6 text-center border-2 border-dashed rounded-2xl ${
-            isLight ? 'border-amber-300 bg-amber-50/50' : 'border-orange-500/30 bg-[#130b08]/60'
-          }`}
-        >
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-orange-500/10 text-[#ff6b00] border border-orange-500/30">
+        <div className="py-20 px-6 text-center border-2 border-dashed rounded-2xl border-[#383a40] bg-[#2b2d31]/40 text-white">
+          <div
+            className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl text-white"
+            style={{ backgroundColor: 'var(--color-accent, #5865f2)' }}
+          >
             <Upload className="h-6 w-6 stroke-[2.5]" />
           </div>
-          <h3 className="text-lg font-bold font-sans">No Published Collections Yet</h3>
-          <p className={`mt-2 text-xs max-w-md mx-auto ${isLight ? 'text-stone-600' : 'text-neutral-400'}`}>
-            All placeholder items have been removed. Publish your photographs, archives, or curated series to share them with the open community for direct download.
+          <h3 className="text-lg font-bold font-sans">No Public Collections Yet</h3>
+          <p className="mt-2 text-xs max-w-md mx-auto text-neutral-400">
+            Publish your files, bundles, or curated asset archives to share them with the open community for direct download.
           </p>
           <button
             onClick={() => {
@@ -240,21 +233,18 @@ export const PublishedFilesSection: React.FC = () => {
                 setIsPublishModalOpen(true);
               }
             }}
-            className="mt-5 inline-flex items-center gap-2 rounded-lg bg-[#ff6b00] px-6 py-2.5 font-sans text-xs font-bold text-black shadow-md shadow-orange-950/40 hover:bg-[#ff7d1f] transition-all hover:scale-105"
+            className="mt-5 inline-flex items-center gap-2 rounded-xl px-6 py-2.5 font-sans text-xs font-bold text-white shadow-md hover:brightness-110 transition-all hover:scale-105"
+            style={{ backgroundColor: 'var(--color-accent, #5865f2)' }}
           >
             <Upload className="h-4 w-4 stroke-[2.5]" />
-            <span>Publish Your First File Collection</span>
+            <span>Publish Your First Package</span>
           </button>
         </div>
       ) : displayed.length === 0 ? (
-        <div
-          className={`py-16 text-center border-2 border-dashed rounded-2xl ${
-            isLight ? 'border-amber-200 bg-amber-50/40' : 'border-orange-500/20 bg-[#130b08]/40'
-          }`}
-        >
-          <Layers className="mx-auto mb-3 h-10 w-10 text-orange-400/60" />
-          <h3 className="text-base font-bold font-sans">No matching published packages</h3>
-          <p className={`mt-1 text-xs font-mono-code ${isLight ? 'text-stone-500' : 'text-neutral-400'}`}>
+        <div className="py-16 text-center border-2 border-dashed rounded-2xl border-[#383a40] bg-[#2b2d31]/30">
+          <Layers className="mx-auto mb-3 h-10 w-10 text-neutral-500" />
+          <h3 className="text-base font-bold font-sans text-white">No matching packages</h3>
+          <p className="mt-1 text-xs font-mono-code text-neutral-400">
             Try clearing filters or search queries.
           </p>
           <button
@@ -262,7 +252,7 @@ export const PublishedFilesSection: React.FC = () => {
               setActiveCategory('all');
               setSearchQuery('');
             }}
-            className="mt-4 text-xs font-bold text-[#ff6b00] hover:underline"
+            className="mt-4 text-xs font-bold text-indigo-400 hover:underline"
           >
             Clear all filters
           </button>
@@ -276,68 +266,56 @@ export const PublishedFilesSection: React.FC = () => {
             return (
               <div
                 key={pkg.id}
-                className={`group rounded-2xl border transition-all duration-300 flex flex-col justify-between overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 ${
-                  isLight
-                    ? 'bg-white border-amber-200 hover:border-amber-300'
-                    : 'bg-[#140b07] border-orange-500/25 hover:border-orange-500/50 shadow-[0_10px_30px_-10px_rgba(255,107,0,0.1)]'
-                }`}
+                className="group rounded-2xl border transition-all duration-300 flex flex-col justify-between overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 bg-[#2b2d31] border-[#383a40] hover:border-[#4e5058]"
               >
                 <div>
-                  {/* Cover preview */}
+                  {/* Clean Package Banner Header */}
                   <div
                     onClick={() => setInspectingPackage(pkg)}
-                    className="relative aspect-[16/10] w-full overflow-hidden bg-black cursor-pointer"
+                    className="relative h-32 w-full overflow-hidden bg-[#232428] cursor-pointer flex flex-col justify-between p-4 border-b border-[#383a40]"
                   >
-                    <img
-                      src={pkg.coverUrl}
-                      alt={pkg.title}
-                      className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent" />
-
-                    <div className="absolute top-3 left-3">
-                      <span className="rounded-md bg-black/80 backdrop-blur-md px-2.5 py-1 font-mono-code text-[10px] uppercase font-bold text-orange-300 border border-orange-500/30">
+                    <div className="flex items-center justify-between">
+                      <span className="rounded-lg bg-black/50 backdrop-blur-md px-2.5 py-1 font-mono-code text-[10px] uppercase font-bold text-neutral-200 border border-white/10">
                         {pkg.category}
+                      </span>
+                      <span className="font-mono-code text-[10px] text-neutral-400">
+                        {pkg.id}
                       </span>
                     </div>
 
-                    <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between text-white font-mono-code text-[11px]">
-                      <span className="flex items-center gap-1 text-orange-200">
-                        <Folder className="h-3.5 w-3.5 text-[#ff6b00]" />
+                    <div className="flex items-center justify-between text-white font-mono-code text-[11px]">
+                      <span className="flex items-center gap-1.5 text-neutral-300">
+                        <Folder className="h-4 w-4" style={{ color: 'var(--color-accent, #5865f2)' }} />
                         {pkg.files.length} {pkg.files.length === 1 ? 'file' : 'files'}
                       </span>
-                      <span className="text-orange-200/80">{pkg.totalSize}</span>
+                      <span className="text-neutral-400">{pkg.totalSize}</span>
                     </div>
                   </div>
 
                   {/* Body */}
                   <div className="p-5">
-                    {/* Author handle */}
-                    <div className="flex items-center justify-between mb-2">
+                    {/* Author handle with letter avatar */}
+                    <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-2">
-                        <img
-                          src={pkg.authorAvatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80'}
-                          alt={pkg.authorUsername}
-                          className="h-5 w-5 rounded-full object-cover ring-1 ring-orange-500/50"
-                        />
-                        <span className="font-mono-code text-xs font-bold text-[#ff6b00]">
+                        <UserAvatar username={pkg.authorUsername} size="sm" />
+                        <span className="font-mono-code text-xs font-bold text-white">
                           @{pkg.authorUsername}
                         </span>
                       </div>
 
-                      <div className={`flex items-center gap-3 text-xs font-mono-code ${isLight ? 'text-stone-500' : 'opacity-75 text-orange-200/80'}`}>
+                      <div className="flex items-center gap-3 text-xs font-mono-code text-neutral-400">
                         <span>{pkg.downloadsCount} downloads</span>
                       </div>
                     </div>
 
                     <h3
                       onClick={() => setInspectingPackage(pkg)}
-                      className="text-base font-bold font-sans cursor-pointer hover:text-[#ff6b00] transition-colors line-clamp-1"
+                      className="text-base font-bold font-sans text-white cursor-pointer hover:underline transition-colors line-clamp-1"
                     >
                       {pkg.title}
                     </h3>
 
-                    <p className={`mt-1.5 text-xs line-clamp-2 leading-relaxed ${isLight ? 'text-stone-600' : 'text-neutral-400'}`}>
+                    <p className="mt-1.5 text-xs line-clamp-2 leading-relaxed text-neutral-400">
                       {pkg.description}
                     </p>
 
@@ -347,9 +325,7 @@ export const PublishedFilesSection: React.FC = () => {
                         {pkg.tags.slice(0, 3).map(tag => (
                           <span
                             key={tag}
-                            className={`px-2 py-0.5 rounded-md ${
-                              isLight ? 'bg-amber-100 text-stone-600' : 'bg-[#1c0f0a] border border-orange-500/20 text-orange-300'
-                            }`}
+                            className="px-2 py-0.5 rounded-md bg-[#232428] border border-[#383a40] text-neutral-300"
                           >
                             #{tag}
                           </span>
@@ -360,23 +336,17 @@ export const PublishedFilesSection: React.FC = () => {
                 </div>
 
                 {/* Card Actions */}
-                <div
-                  className={`p-4 border-t flex items-center justify-between gap-2 ${
-                    isLight ? 'border-amber-100 bg-amber-50/30' : 'border-orange-500/15 bg-[#170d09]/80'
-                  }`}
-                >
+                <div className="p-4 border-t flex items-center justify-between gap-2 border-[#383a40] bg-[#232428]">
                   {/* Like button */}
                   <button
                     onClick={() => togglePublishedLikeAction(pkg.id)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono-code transition-colors ${
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-mono-code transition-colors ${
                       hasLiked
-                        ? 'bg-orange-500/20 text-[#ff6b00] border border-orange-500/40'
-                        : isLight
-                        ? 'text-stone-600 hover:text-orange-600 hover:bg-orange-50'
-                        : 'text-neutral-400 hover:text-orange-400 hover:bg-[#22130c]'
+                        ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                        : 'text-neutral-400 hover:text-rose-400 hover:bg-[#313338]'
                     }`}
                   >
-                    <Heart className={`h-3.5 w-3.5 ${hasLiked ? 'fill-current text-[#ff6b00]' : ''}`} />
+                    <Heart className={`h-3.5 w-3.5 ${hasLiked ? 'fill-current text-rose-500' : ''}`} />
                     <span>{pkg.likesCount}</span>
                   </button>
 
@@ -385,13 +355,9 @@ export const PublishedFilesSection: React.FC = () => {
                     <button
                       onClick={() => setInspectingPackage(pkg)}
                       title="Inspect files inside this bundle"
-                      className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-mono-code border transition-colors ${
-                        isLight
-                          ? 'border-amber-200 text-stone-700 hover:bg-amber-100'
-                          : 'border-orange-500/30 text-orange-200 hover:bg-[#22130c]'
-                      }`}
+                      className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-mono-code border transition-colors border-[#383a40] text-neutral-200 hover:bg-[#313338]"
                     >
-                      <Eye className="h-3 w-3 text-orange-400" />
+                      <Eye className="h-3 w-3 text-neutral-400" />
                       <span>Files</span>
                     </button>
 
@@ -399,7 +365,8 @@ export const PublishedFilesSection: React.FC = () => {
                     <button
                       onClick={() => handleDownloadZip(pkg)}
                       disabled={isDownloading}
-                      className="flex items-center gap-1.5 rounded-lg bg-[#ff6b00] px-4 py-1.5 text-xs font-bold text-black shadow-sm hover:bg-[#ff7d1f] active:scale-95 transition-all disabled:opacity-50"
+                      className="flex items-center gap-1.5 rounded-xl px-4 py-1.5 text-xs font-bold text-white shadow-sm hover:brightness-110 active:scale-95 transition-all disabled:opacity-50"
+                      style={{ backgroundColor: 'var(--color-accent, #5865f2)' }}
                     >
                       <Download className="h-3.5 w-3.5 stroke-[2.5]" />
                       <span>{isDownloading ? 'Packing...' : 'Download'}</span>
@@ -414,21 +381,11 @@ export const PublishedFilesSection: React.FC = () => {
 
       {/* Package Inspector Modal */}
       {inspectingPackage && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm animate-in fade-in duration-200">
-          <div
-            className={`relative w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl border p-6 sm:p-8 shadow-2xl transition-colors ${
-              isLight
-                ? 'bg-white border-amber-200 text-stone-900'
-                : 'bg-[#130b08] border-orange-500/30 text-white shadow-[0_20px_70px_-15px_rgba(255,107,0,0.25)]'
-            }`}
-          >
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="relative w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl border p-6 sm:p-8 shadow-2xl bg-[#2b2d31] border-[#383a40] text-white">
             <button
               onClick={() => setInspectingPackage(null)}
-              className={`absolute top-4 right-4 flex h-8 w-8 items-center justify-center rounded-lg border transition-colors ${
-                isLight
-                  ? 'border-amber-200 text-stone-500 hover:bg-amber-50 hover:text-stone-900'
-                  : 'border-orange-500/30 text-orange-200 hover:bg-[#22130c] hover:text-white'
-              }`}
+              className="absolute top-4 right-4 flex h-8 w-8 items-center justify-center rounded-xl border border-[#383a40] text-neutral-400 hover:bg-[#313338] hover:text-white transition-colors"
             >
               <X className="h-4 w-4" />
             </button>
@@ -436,23 +393,26 @@ export const PublishedFilesSection: React.FC = () => {
             {/* Modal Header */}
             <div className="mb-6">
               <div className="flex items-center gap-2">
-                <span className="font-mono-code text-[11px] font-bold uppercase tracking-wider text-[#ff6b00]">
+                <span className="font-mono-code text-[11px] font-bold uppercase tracking-wider text-neutral-400">
                   {inspectingPackage.id} • {inspectingPackage.category}
                 </span>
               </div>
-              <h2 className="mt-1 font-sans text-2xl font-bold">
+              <h2 className="mt-1 font-sans text-2xl font-bold text-white">
                 {inspectingPackage.title}
               </h2>
-              <div className="mt-2 flex flex-wrap items-center gap-3 font-mono-code text-xs opacity-75">
-                <span>Published by <strong>@{inspectingPackage.authorUsername}</strong></span>
+              <div className="mt-2 flex flex-wrap items-center gap-3 font-mono-code text-xs text-neutral-400">
+                <span className="flex items-center gap-1.5">
+                  <UserAvatar username={inspectingPackage.authorUsername} size="xs" />
+                  <span>Published by <strong>@{inspectingPackage.authorUsername}</strong></span>
+                </span>
                 <span>•</span>
-                <span>{inspectingPackage.files.length} Assets</span>
+                <span>{inspectingPackage.files.length} Files</span>
                 <span>•</span>
                 <span>{inspectingPackage.totalSize}</span>
                 <span>•</span>
                 <span>{inspectingPackage.downloadsCount} downloads</span>
               </div>
-              <p className={`mt-3 text-xs leading-relaxed ${isLight ? 'text-stone-600' : 'text-neutral-400'}`}>
+              <p className="mt-3 text-xs leading-relaxed text-neutral-400">
                 {inspectingPackage.description}
               </p>
             </div>
@@ -462,7 +422,8 @@ export const PublishedFilesSection: React.FC = () => {
               <button
                 onClick={() => handleDownloadZip(inspectingPackage)}
                 disabled={downloadingZipId === inspectingPackage.id}
-                className="flex items-center gap-2 rounded-lg bg-[#ff6b00] px-6 py-2.5 text-xs font-bold text-black shadow-md shadow-orange-950/40 hover:bg-[#ff7d1f] transition-all disabled:opacity-50"
+                className="flex items-center gap-2 rounded-xl px-6 py-2.5 text-xs font-bold text-white shadow-md hover:brightness-110 transition-all disabled:opacity-50"
+                style={{ backgroundColor: 'var(--color-accent, #5865f2)' }}
               >
                 <FileArchive className="h-4 w-4" />
                 <span>
@@ -474,52 +435,40 @@ export const PublishedFilesSection: React.FC = () => {
 
               <button
                 onClick={() => copyShareLink(inspectingPackage.id)}
-                className={`flex items-center gap-1.5 rounded-lg border px-4 py-2 text-xs font-mono-code transition-colors ${
-                  isLight
-                    ? 'border-amber-300 text-stone-700 hover:bg-amber-100'
-                    : 'border-orange-500/30 text-orange-200 hover:bg-[#22130c]'
-                }`}
+                className="flex items-center gap-1.5 rounded-xl border px-4 py-2 text-xs font-mono-code border-[#383a40] text-neutral-300 hover:bg-[#313338] transition-colors"
               >
-                {copiedLink ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Share2 className="h-3.5 w-3.5 text-[#ff6b00]" />}
+                {copiedLink ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Share2 className="h-3.5 w-3.5" />}
                 <span>{copiedLink ? 'Link Copied!' : 'Share'}</span>
               </button>
             </div>
 
             {/* Files List */}
-            <div className={`border-t pt-4 ${isLight ? 'border-amber-200' : 'border-orange-500/20'}`}>
-              <h4 className={`text-xs font-mono-code uppercase font-semibold mb-3 ${isLight ? 'text-amber-900' : 'text-orange-300'}`}>
+            <div className="border-t pt-4 border-[#383a40]">
+              <h4 className="text-xs font-mono-code uppercase font-semibold mb-3 text-neutral-300">
                 Included Files ({inspectingPackage.files.length})
               </h4>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {inspectingPackage.files.map((file, idx) => (
+                {inspectingPackage.files.map(file => (
                   <div
                     key={file.id}
-                    className={`rounded-xl border p-3 flex items-center justify-between gap-3 ${
-                      isLight ? 'border-amber-200 bg-amber-50/50' : 'border-orange-500/20 bg-[#190e09]'
-                    }`}
+                    className="rounded-xl border p-3 flex items-center justify-between gap-3 border-[#383a40] bg-[#232428]"
                   >
                     <div className="flex items-center gap-3 min-w-0">
-                      <img
-                        src={file.url}
-                        alt={file.name}
-                        className="h-12 w-12 rounded-lg object-cover bg-black shrink-0"
-                      />
+                      <div className="h-10 w-10 rounded-lg bg-[#313338] flex items-center justify-center shrink-0 text-neutral-400">
+                        <FileText className="h-5 w-5" />
+                      </div>
                       <div className="min-w-0">
-                        <p className={`text-xs font-semibold truncate font-mono-code ${isLight ? 'text-stone-900' : 'text-orange-100'}`}>{file.name}</p>
-                        <p className="text-[10px] font-mono-code opacity-70 mt-0.5">{file.size}</p>
+                        <p className="text-xs font-semibold truncate font-mono-code text-white">{file.name}</p>
+                        <p className="text-[10px] font-mono-code text-neutral-400 mt-0.5">{file.size}</p>
                       </div>
                     </div>
 
                     <button
                       onClick={() => handleDownloadSingleFile(file, inspectingPackage.id)}
-                      className={`flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs font-medium shrink-0 transition-colors ${
-                        isLight
-                          ? 'border-amber-300 bg-white text-stone-800 hover:border-orange-500 hover:text-orange-600'
-                          : 'border-orange-500/30 bg-[#24130c] text-orange-200 hover:border-[#ff6b00] hover:text-white'
-                      }`}
+                      className="flex items-center gap-1 rounded-xl border px-3 py-1.5 text-xs font-medium shrink-0 border-[#383a40] bg-[#2b2d31] text-neutral-200 hover:border-neutral-400 transition-colors"
                     >
-                      <Download className="h-3 w-3 text-[#ff6b00]" />
+                      <Download className="h-3 w-3" />
                       <span>Download</span>
                     </button>
                   </div>

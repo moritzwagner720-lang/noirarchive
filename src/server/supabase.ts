@@ -68,6 +68,17 @@ export interface UserDTO {
   passwordHash: string;
   createdAt: string;
   friends: string[];
+  selectedTheme?: string;
+  groupPrivacy?: 'everyone' | 'friends' | 'nobody';
+}
+
+export interface FriendGroupDTO {
+  id: string;
+  ownerUsername: string;
+  name: string;
+  memberUsernames: string[];
+  createdAt: string;
+  updatedAt?: string;
 }
 
 export interface FriendRequestDTO {
@@ -97,6 +108,8 @@ function mapUserFromDb(row: any): UserDTO {
     passwordHash: row.password_hash || '',
     createdAt: row.created_at || new Date().toISOString(),
     friends: Array.isArray(row.friends) ? row.friends : [],
+    selectedTheme: row.selected_theme || 'graphite',
+    groupPrivacy: (row.group_privacy as any) || 'friends',
   };
 }
 
@@ -239,6 +252,139 @@ export async function updateSupabaseUserFriends(username: string, friends: strin
   if (error) {
     console.error('[Supabase] Error updating friends:', error.message);
   }
+}
+
+export async function updateSupabaseUserSettings(
+  username: string,
+  settings: {
+    selectedTheme?: string;
+    groupPrivacy?: string;
+    bio?: string;
+    location?: string;
+    displayName?: string;
+    customAvatar?: string | null;
+    settings?: any;
+    favoritePackageIds?: string[];
+  }
+): Promise<UserDTO | null> {
+  if (!client) return null;
+  const clean = username.toLowerCase().trim();
+  const updatePayload: any = { updated_at: new Date().toISOString() };
+  if (settings.selectedTheme) updatePayload.selected_theme = settings.selectedTheme;
+  if (settings.groupPrivacy) updatePayload.group_privacy = settings.groupPrivacy;
+  if (settings.bio !== undefined) updatePayload.bio = settings.bio;
+  if (settings.location !== undefined) updatePayload.location = settings.location;
+
+  const { data, error } = await client
+    .from('users')
+    .update(updatePayload)
+    .ilike('username', clean)
+    .select('*')
+    .maybeSingle();
+
+  if (error) {
+    console.error('[Supabase] Error updating user settings:', error.message);
+    return null;
+  }
+  return data ? mapUserFromDb(data) : null;
+}
+
+export async function deleteSupabasePublished(id: string): Promise<boolean> {
+  if (!client) return true;
+  try {
+    const { error } = await client.from('published_packages').delete().eq('id', id);
+    if (error) {
+      console.warn('[Supabase] Error deleting published package:', error.message);
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Friend Groups
+function mapFriendGroupFromDb(row: any): FriendGroupDTO {
+  return {
+    id: row.id,
+    ownerUsername: row.owner_username,
+    name: row.name,
+    memberUsernames: Array.isArray(row.member_usernames) ? row.member_usernames : [],
+    createdAt: row.created_at || new Date().toISOString(),
+    updatedAt: row.updated_at || new Date().toISOString(),
+  };
+}
+
+export async function getSupabaseGroups(usernameFilter?: string): Promise<FriendGroupDTO[]> {
+  if (!client) return [];
+  try {
+    let query = client.from('friend_groups').select('*').order('created_at', { ascending: false });
+    const { data, error } = await query;
+    if (error) {
+      console.warn('[Supabase] friend_groups table query info:', error.message);
+      return [];
+    }
+    const all = (data || []).map(mapFriendGroupFromDb);
+    if (usernameFilter) {
+      const clean = usernameFilter.replace(/^@/, '').toLowerCase().trim();
+      return all.filter(
+        g =>
+          g.ownerUsername.toLowerCase() === clean ||
+          g.memberUsernames.map(m => m.toLowerCase()).includes(clean)
+      );
+    }
+    return all;
+  } catch (err: any) {
+    console.warn('[Supabase] Groups query fallback:', err?.message);
+    return [];
+  }
+}
+
+export async function createSupabaseGroup(group: FriendGroupDTO): Promise<FriendGroupDTO> {
+  if (!client) return group;
+  try {
+    const payload = {
+      id: group.id,
+      owner_username: group.ownerUsername.toLowerCase().trim(),
+      name: group.name.trim(),
+      member_usernames: group.memberUsernames.map(m => m.toLowerCase().trim()),
+      created_at: group.createdAt,
+      updated_at: group.updatedAt || new Date().toISOString(),
+    };
+    const { data, error } = await client.from('friend_groups').insert(payload).select('*').single();
+    if (error) {
+      console.warn('[Supabase] Error creating friend group in cloud DB:', error.message);
+      return group;
+    }
+    return mapFriendGroupFromDb(data);
+  } catch {
+    return group;
+  }
+}
+
+export async function updateSupabaseGroup(group: FriendGroupDTO): Promise<void> {
+  if (!client) return;
+  try {
+    const payload = {
+      name: group.name.trim(),
+      member_usernames: group.memberUsernames.map(m => m.toLowerCase().trim()),
+      updated_at: new Date().toISOString(),
+    };
+    const { error } = await client.from('friend_groups').update(payload).eq('id', group.id);
+    if (error) {
+      console.warn('[Supabase] Error updating friend group:', error.message);
+    }
+  } catch {}
+}
+
+export async function deleteSupabaseGroup(id: string): Promise<void> {
+  if (!client) return;
+  try {
+    const { error } = await client.from('friend_groups').delete().eq('id', id);
+    if (error) {
+      console.warn('[Supabase] Error deleting friend group:', error.message);
+    }
+  } catch {}
 }
 
 // Friend Requests

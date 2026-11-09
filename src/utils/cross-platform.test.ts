@@ -138,7 +138,7 @@ test('Cross-platform verification: Browser client and Windows Electron client ag
           name: 'Monochrome_Street_01.jpg',
           size: '12.4 MB',
           type: 'image/jpeg',
-          url: 'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=1200&q=85',
+          url: 'data:image/jpeg;base64,sample_file_payload',
         },
       ],
       totalSize: '12.4 MB',

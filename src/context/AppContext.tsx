@@ -4,13 +4,14 @@ import {
   Project,
   Photo,
   FileTransferPackage,
-  GridLayout,
-  PhotoCategory,
-  ClientReview,
   FriendRequest,
   ChatMessage,
   ChatAttachment,
   PublishedPackage,
+  FriendGroup,
+  GroupPrivacySetting,
+  ThemeId,
+  UserSettings,
 } from '../types';
 import {
   INITIAL_USERS,
@@ -21,10 +22,12 @@ import {
   INITIAL_CHAT_MESSAGES,
   INITIAL_PUBLISHED_PACKAGES,
 } from '../data/mockData';
-import { validateUsername, validatePassword, hashPassword, verifyPassword } from '../utils/auth';
+import { validateUsername, validatePassword, hashPassword } from '../utils/auth';
 import { createTransferPackage, CreateTransferInput } from '../utils/transfer';
-import { canSendFriendRequest, createFriendRequest, createChatMessage } from '../utils/friends';
+import { createFriendRequest, createChatMessage } from '../utils/friends';
 import { createPublishedPackage, togglePackageLike, CreatePublishedInput } from '../utils/published';
+import { createFriendGroup, canAddToGroup } from '../utils/groups';
+import { applyThemeToDocument, DEFAULT_THEME_ID } from '../utils/themes';
 import { apiUrl } from '../utils/api';
 
 interface AppContextType {
@@ -36,26 +39,44 @@ interface AppContextType {
   transfers: FileTransferPackage[];
   friendRequests: FriendRequest[];
   chatMessages: ChatMessage[];
+  groups: FriendGroup[];
 
   // Navigation & Views
-  activeTab: 'explore' | 'published' | 'projects' | 'manage' | 'transfers' | 'friends';
-  setActiveTab: (tab: 'explore' | 'published' | 'projects' | 'manage' | 'transfers' | 'friends') => void;
-  selectedPhotographer: User | null;
-  setSelectedPhotographer: (user: User | null) => void;
-  selectedProject: Project | null;
-  setSelectedProject: (project: Project | null) => void;
-  lightboxPhoto: Photo | null;
-  setLightboxPhoto: (photo: Photo | null) => void;
-
-  // Layout & Aesthetic
-  gridLayout: GridLayout;
-  setGridLayout: (layout: GridLayout) => void;
-  selectedCategory: 'all' | PhotoCategory;
-  setSelectedCategory: (cat: 'all' | PhotoCategory) => void;
-  theme: 'dark' | 'light';
-  toggleTheme: () => void;
+  activeTab: 'transfers' | 'friends' | 'published' | 'settings' | 'explore';
+  setActiveTab: (tab: 'transfers' | 'friends' | 'published' | 'settings' | 'explore') => void;
   searchQuery: string;
   setSearchQuery: (query: string) => void;
+
+  // Theme Customization & Atmosphere
+  selectedTheme: ThemeId;
+  setThemeAction: (themeId: ThemeId) => Promise<void>;
+  theme: 'dark' | 'light';
+  toggleTheme: () => void;
+  seasonalEffectsEnabled: boolean;
+  setSeasonalEffectsEnabled: (enabled: boolean) => void;
+
+  // Custom Avatar & Profile Actions
+  isAvatarEditorOpen: boolean;
+  setIsAvatarEditorOpen: (open: boolean) => void;
+  updateCustomAvatarAction: (avatarDataUrl: string | null) => Promise<{ success: boolean; error?: string }>;
+  updateUserSettingsAction: (
+    newSettings: Partial<UserSettings>,
+    profileUpdates?: { displayName?: string; bio?: string; location?: string }
+  ) => Promise<{ success: boolean; error?: string }>;
+  changePasswordAction: (currentPassword: string, newPassword: string) => Promise<{ success: boolean; error?: string }>;
+
+  // Group Invitation Privacy Setting
+  groupPrivacy: GroupPrivacySetting;
+  setGroupPrivacyAction: (privacy: GroupPrivacySetting) => Promise<void>;
+
+  // Friend Groups Management
+  activeGroupId: string | null;
+  setActiveGroupId: (id: string | null) => void;
+  createGroupAction: (name: string, members?: string[]) => Promise<{ success: boolean; group?: FriendGroup; error?: string }>;
+  renameGroupAction: (groupId: string, name: string) => Promise<{ success: boolean; error?: string }>;
+  deleteGroupAction: (groupId: string) => Promise<{ success: boolean; error?: string }>;
+  addMemberToGroupAction: (groupId: string, username: string) => Promise<{ success: boolean; error?: string }>;
+  removeMemberFromGroupAction: (groupId: string, username: string) => Promise<{ success: boolean; error?: string }>;
 
   // Auth Modals & Actions
   authModal: 'signin' | 'signup' | null;
@@ -65,76 +86,84 @@ interface AppContextType {
     password: string;
     bio?: string;
     location?: string;
-    avatar?: string;
-  }) => Promise<{ success: boolean; error?: string }> | { success: boolean; error?: string };
-  signIn: (username: string, password: string) => Promise<{ success: boolean; error?: string }> | { success: boolean; error?: string };
+  }) => Promise<{ success: boolean; error?: string }>;
+  signIn: (username: string, password: string) => Promise<{ success: boolean; error?: string }>;
   signOut: () => void;
   switchUserQuick: (username: string) => void;
   searchAccountsGlobally: (query: string) => Promise<User[]>;
 
-  // Avatar Management Modal
-  isAvatarModalOpen: boolean;
-  setIsAvatarModalOpen: (open: boolean) => void;
-  updateUserAvatar: (avatar: string) => Promise<void> | void;
-
-  // Project Management
-  createProject: (data: {
-    title: string;
-    description: string;
-    category: PhotoCategory;
-    layoutPreference: GridLayout;
-    coverPhotoUrl?: string;
-    clientDeliveryNotes?: string;
-    clientName?: string;
-  }) => Project;
-  updateProject: (id: string, updates: Partial<Project>) => void;
-  deleteProject: (id: string) => void;
-  addPhoto: (photo: Omit<Photo, 'id' | 'createdAt' | 'userId'>) => Photo;
-  deletePhoto: (id: string) => void;
-  updatePhoto: (id: string, updates: Partial<Photo>) => void;
-
   // Transfers
   isTransferModalOpen: boolean;
   setIsTransferModalOpen: (open: boolean) => void;
-  preselectedTransferProject: Project | null;
-  openTransferModalForProject: (project: Project) => void;
   sendTransfer: (input: CreateTransferInput) => { success: boolean; packageId?: string; error?: string };
   revokeTransfer: (id: string) => void;
   recordDownload: (id: string) => void;
-  addTransferReview: (id: string, review: Omit<ClientReview, 'id' | 'createdAt'>) => void;
+  toggleFavoriteTransferAction: (packageId: string) => Promise<void>;
   activeTransferPortalId: string | null;
   setActiveTransferPortalId: (id: string | null) => void;
 
   // Friends & Chat
   activeChatFriend: string | null;
   setActiveChatFriend: (username: string | null) => void;
-  sendFriendRequestAction: (toUsername: string) => Promise<{ success: boolean; error?: string }> | { success: boolean; error?: string };
+  sendFriendRequestAction: (toUsername: string) => Promise<{ success: boolean; error?: string }>;
   acceptFriendRequestAction: (requestId: string) => void;
   declineFriendRequestAction: (requestId: string) => void;
   cancelFriendRequestAction: (requestId: string) => void;
   sendChatMessageAction: (recipientUsername: string, text: string, attachment?: ChatAttachment) => void;
 
-  // Published Files & Public Downloads
+  // Published Community Files & Vault Packages
   publishedPackages: PublishedPackage[];
   publishPackageAction: (input: CreatePublishedInput) => { success: boolean; package?: PublishedPackage; error?: string };
+  editPublishedPackageAction: (id: string, updates: Partial<PublishedPackage>) => Promise<{ success: boolean; error?: string }>;
+  deletePublishedPackageAction: (id: string) => Promise<{ success: boolean; error?: string }>;
+  reportPackageAction: (packageId: string, reason: string, details?: string) => Promise<{ success: boolean; error?: string }>;
   recordPublishedDownload: (id: string) => void;
   togglePublishedLikeAction: (id: string) => void;
   isPublishModalOpen: boolean;
   setIsPublishModalOpen: (open: boolean) => void;
-}
 
+  // Media Preview & Reporting modals
+  activeReportModalPackage: PublishedPackage | null;
+  setActiveReportModalPackage: (pkg: PublishedPackage | null) => void;
+  activePreviewMedia: { url: string; title: string; type: 'image' | 'video' } | null;
+  setActivePreviewMedia: (media: { url: string; title: string; type: 'image' | 'video' } | null) => void;
+
+  // Legacy compat stubs
+  selectedPhotographer: User | null;
+  setSelectedPhotographer: (user: User | null) => void;
+  selectedProject: Project | null;
+  setSelectedProject: (project: Project | null) => void;
+  lightboxPhoto: Photo | null;
+  setLightboxPhoto: (photo: Photo | null) => void;
+  gridLayout: any;
+  setGridLayout: (layout: any) => void;
+  selectedCategory: any;
+  setSelectedCategory: (cat: any) => void;
+  isAvatarModalOpen: boolean;
+  setIsAvatarModalOpen: (open: boolean) => void;
+  updateUserAvatar: (avatar: string) => Promise<void>;
+  createProject: (data: any) => Project;
+  updateProject: (id: string, updates: Partial<Project>) => void;
+  deleteProject: (id: string) => void;
+  addPhoto: (photo: any) => Photo;
+  deletePhoto: (id: string) => void;
+  updatePhoto: (id: string, updates: Partial<Photo>) => void;
+  preselectedTransferProject: Project | null;
+  openTransferModalForProject: (project: Project) => void;
+  addTransferReview: (id: string, review: any) => void;
+}
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-const STORAGE_KEY_USERS = 'noir_archive_users_v5';
-const STORAGE_KEY_CURRENT_USER = 'noir_archive_current_user_v5';
-const STORAGE_KEY_PROJECTS = 'noir_archive_projects_v5';
-const STORAGE_KEY_PHOTOS = 'noir_archive_photos_v5';
-const STORAGE_KEY_TRANSFERS = 'noir_archive_transfers_v5';
-const STORAGE_KEY_THEME = 'noir_archive_theme_v5';
-const STORAGE_KEY_FRIEND_REQUESTS = 'noir_archive_friend_requests_v5';
-const STORAGE_KEY_CHAT_MESSAGES = 'noir_archive_chat_messages_v5';
-const STORAGE_KEY_PUBLISHED = 'noir_archive_published_v5';
+
+const STORAGE_KEY_USERS = 'noir_archive_users_v6';
+const STORAGE_KEY_CURRENT_USER = 'noir_archive_current_user_v6';
+const STORAGE_KEY_GROUPS = 'noir_archive_groups_v6';
+const STORAGE_KEY_TRANSFERS = 'noir_archive_transfers_v6';
+const STORAGE_KEY_THEME = 'noir_archive_theme_v6';
+const STORAGE_KEY_FRIEND_REQUESTS = 'noir_archive_friend_requests_v6';
+const STORAGE_KEY_CHAT_MESSAGES = 'noir_archive_chat_messages_v6';
+const STORAGE_KEY_PUBLISHED = 'noir_archive_published_v6';
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [users, setUsers] = useState<User[]>(() => {
@@ -143,38 +172,42 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const parsed: User[] = stored ? JSON.parse(stored) : [];
       const userMap = new Map<string, User>();
       INITIAL_USERS.forEach(u => userMap.set(u.username.toLowerCase(), u));
-      parsed.forEach(u => userMap.set(u.username.toLowerCase(), u));
+      parsed.forEach(u => {
+        const def = userMap.get(u.username.toLowerCase());
+        userMap.set(u.username.toLowerCase(), {
+          ...def,
+          ...u,
+          avatar: '', // Strict letter-based avatars: no human photos
+          selectedTheme: u.selectedTheme || def?.selectedTheme || 'graphite',
+          groupPrivacy: u.groupPrivacy || def?.groupPrivacy || 'friends',
+        });
+      });
       return Array.from(userMap.values());
     } catch {
       return INITIAL_USERS;
     }
   });
 
-  // Persistent user session: Remains logged in across refreshes until explicit sign-out
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY_CURRENT_USER);
-      return stored ? JSON.parse(stored) : null;
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        parsed.avatar = ''; // Ensure no human avatar
+        return parsed;
+      }
+      return null;
     } catch {
       return null;
     }
   });
 
-  const [projects, setProjects] = useState<Project[]>(() => {
+  const [groups, setGroups] = useState<FriendGroup[]>(() => {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY_PROJECTS);
-      return stored ? JSON.parse(stored) : INITIAL_PROJECTS;
+      const stored = localStorage.getItem(STORAGE_KEY_GROUPS);
+      return stored ? JSON.parse(stored) : [];
     } catch {
-      return INITIAL_PROJECTS;
-    }
-  });
-
-  const [photos, setPhotos] = useState<Photo[]>(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY_PHOTOS);
-      return stored ? JSON.parse(stored) : INITIAL_PHOTOS;
-    } catch {
-      return INITIAL_PHOTOS;
+      return [];
     }
   });
 
@@ -205,22 +238,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   });
 
-  // UI state
-  const [activeTab, setActiveTab] = useState<'explore' | 'published' | 'projects' | 'manage' | 'transfers' | 'friends'>('explore');
-  const [selectedPhotographer, setSelectedPhotographer] = useState<User | null>(null);
-  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
-  const [lightboxPhoto, setLightboxPhoto] = useState<Photo | null>(null);
-  const [gridLayout, setGridLayout] = useState<GridLayout>('grid-3');
-  const [selectedCategory, setSelectedCategory] = useState<'all' | PhotoCategory>('all');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [authModal, setAuthModal] = useState<'signin' | 'signup' | null>(null);
-  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
-  const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
-  const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
-  const [preselectedTransferProject, setPreselectedTransferProject] = useState<Project | null>(null);
-  const [activeTransferPortalId, setActiveTransferPortalId] = useState<string | null>(null);
-  const [activeChatFriend, setActiveChatFriend] = useState<string | null>('elena_k');
-
   const [publishedPackages, setPublishedPackages] = useState<PublishedPackage[]>(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY_PUBLISHED);
@@ -230,91 +247,85 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   });
 
-  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+  // UI Navigation
+  const [activeTab, setActiveTabState] = useState<'transfers' | 'friends' | 'published' | 'settings' | 'explore'>('transfers');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [authModal, setAuthModal] = useState<'signin' | 'signup' | null>(null);
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+  const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
+  const [activeTransferPortalId, setActiveTransferPortalId] = useState<string | null>(null);
+  const [activeChatFriend, setActiveChatFriend] = useState<string | null>('elena_k');
+  const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
+
+  // Selected Theme (default: Graphite)
+  const [selectedTheme, setSelectedTheme] = useState<ThemeId>(() => {
     try {
-      return (localStorage.getItem(STORAGE_KEY_THEME) as 'dark' | 'light') || 'dark';
+      const stored = localStorage.getItem(STORAGE_KEY_THEME) as ThemeId;
+      return stored || currentUser?.selectedTheme || DEFAULT_THEME_ID;
     } catch {
-      return 'dark';
+      return DEFAULT_THEME_ID;
     }
   });
 
-  // Apply theme to HTML and body immediately
+  // Group Invitation Privacy Setting (default: 'friends')
+  const [groupPrivacy, setGroupPrivacy] = useState<GroupPrivacySetting>(() => {
+    return currentUser?.groupPrivacy || 'friends';
+  });
+
+  // Map 'explore' tab directly to 'transfers'
+  const setActiveTab = (tab: 'transfers' | 'friends' | 'published' | 'settings' | 'explore') => {
+    setActiveTabState(tab === 'explore' ? 'transfers' : tab);
+  };
+
+  // Keep theme synced across document & storage
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY_THEME, theme);
-      if (typeof document !== 'undefined') {
-        const root = document.documentElement;
-        if (theme === 'dark') {
-          root.classList.add('dark');
-          document.body.classList.add('dark');
-          document.body.style.backgroundColor = '#090503';
-          document.body.style.color = '#ffffff';
-        } else {
-          root.classList.remove('dark');
-          document.body.classList.remove('dark');
-          document.body.style.backgroundColor = '#fcf8f5';
-          document.body.style.color = '#1c1917';
-        }
+      localStorage.setItem(STORAGE_KEY_THEME, selectedTheme);
+      applyThemeToDocument(selectedTheme);
+    } catch (e) {
+      console.warn('Theme apply error', e);
+    }
+  }, [selectedTheme]);
+
+  // When currentUser changes, restore their saved theme and group privacy
+  useEffect(() => {
+    if (currentUser) {
+      if (currentUser.selectedTheme && currentUser.selectedTheme !== selectedTheme) {
+        setSelectedTheme(currentUser.selectedTheme);
       }
-    } catch (e) {
-      console.warn('Theme storage error', e);
+      if (currentUser.groupPrivacy && currentUser.groupPrivacy !== groupPrivacy) {
+        setGroupPrivacy(currentUser.groupPrivacy);
+      }
     }
-  }, [theme]);
+  }, [currentUser?.username]);
 
-  // Sync published packages
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY_PUBLISHED, JSON.stringify(publishedPackages));
-    } catch (e) {
-      console.warn('Storage error', e);
-    }
-  }, [publishedPackages]);
-
-  // Sync to localStorage
+  // Sync to local storage
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY_USERS, JSON.stringify(users));
-    } catch (e) {
-      console.warn('Storage error', e);
-    }
-  }, [users]);
+      localStorage.setItem(STORAGE_KEY_GROUPS, JSON.stringify(groups));
+      localStorage.setItem(STORAGE_KEY_TRANSFERS, JSON.stringify(transfers));
+      localStorage.setItem(STORAGE_KEY_FRIEND_REQUESTS, JSON.stringify(friendRequests));
+      localStorage.setItem(STORAGE_KEY_CHAT_MESSAGES, JSON.stringify(chatMessages));
+      localStorage.setItem(STORAGE_KEY_PUBLISHED, JSON.stringify(publishedPackages));
+      if (currentUser) {
+        localStorage.setItem(STORAGE_KEY_CURRENT_USER, JSON.stringify(currentUser));
+      } else {
+        localStorage.removeItem(STORAGE_KEY_CURRENT_USER);
+      }
+    } catch {}
+  }, [users, groups, transfers, friendRequests, chatMessages, publishedPackages, currentUser]);
 
   const currentUserRef = useRef<User | null>(currentUser);
   useEffect(() => {
     currentUserRef.current = currentUser;
   }, [currentUser]);
 
-  // Persist current logged-in user session so refresh does not log them out
-  useEffect(() => {
-    try {
-      if (currentUser) {
-        localStorage.setItem(STORAGE_KEY_CURRENT_USER, JSON.stringify(currentUser));
-      } else {
-        localStorage.removeItem(STORAGE_KEY_CURRENT_USER);
-      }
-    } catch (e) {
-      console.warn('Storage error', e);
-    }
-  }, [currentUser]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY_PROJECTS, JSON.stringify(projects));
-      localStorage.setItem(STORAGE_KEY_PHOTOS, JSON.stringify(photos));
-      localStorage.setItem(STORAGE_KEY_TRANSFERS, JSON.stringify(transfers));
-      localStorage.setItem(STORAGE_KEY_FRIEND_REQUESTS, JSON.stringify(friendRequests));
-      localStorage.setItem(STORAGE_KEY_CHAT_MESSAGES, JSON.stringify(chatMessages));
-    } catch (e) {
-      console.warn('Storage error', e);
-    }
-  }, [projects, photos, transfers, friendRequests, chatMessages]);
-
-  // Synchronize state with backend server via SSE & high-efficiency polling
+  // Server-Sent Events (SSE) & Periodic Synchronization
   useEffect(() => {
     let isMounted = true;
     let es: EventSource | null = null;
 
-    // Real-Time Server-Sent Events (SSE) Listener
     try {
       es = new EventSource(apiUrl('/api/events'));
 
@@ -349,6 +360,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                   const ex = map.get(u.username.toLowerCase());
                   map.set(u.username.toLowerCase(), {
                     ...u,
+                    avatar: '',
                     passwordHash: ex?.passwordHash || hashPassword('password123'),
                     friends: u.friends || [],
                   });
@@ -363,17 +375,41 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       es.addEventListener('friend_request_declined', (e) => {
         try {
           const { id } = JSON.parse(e.data);
-          if (isMounted) {
-            setFriendRequests(prev => prev.map(r => (r.id === id ? { ...r, status: 'declined' } : r)));
-          }
+          if (isMounted) setFriendRequests(prev => prev.map(r => (r.id === id ? { ...r, status: 'declined' } : r)));
         } catch {}
       });
 
       es.addEventListener('friend_request_cancelled', (e) => {
         try {
           const { id } = JSON.parse(e.data);
+          if (isMounted) setFriendRequests(prev => prev.filter(r => r.id !== id));
+        } catch {}
+      });
+
+      es.addEventListener('group_created', (e) => {
+        try {
+          const grp: FriendGroup = JSON.parse(e.data);
           if (isMounted) {
-            setFriendRequests(prev => prev.filter(r => r.id !== id));
+            setGroups(prev => (prev.some(g => g.id === grp.id) ? prev : [grp, ...prev]));
+          }
+        } catch {}
+      });
+
+      es.addEventListener('group_updated', (e) => {
+        try {
+          const grp: FriendGroup = JSON.parse(e.data);
+          if (isMounted) {
+            setGroups(prev => prev.map(g => (g.id === grp.id ? grp : g)));
+          }
+        } catch {}
+      });
+
+      es.addEventListener('group_deleted', (e) => {
+        try {
+          const { id } = JSON.parse(e.data);
+          if (isMounted) {
+            setGroups(prev => prev.filter(g => g.id !== id));
+            if (activeGroupId === id) setActiveGroupId(null);
           }
         } catch {}
       });
@@ -413,46 +449,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         } catch {}
       });
 
-      es.addEventListener('transfer_reviewed', (e) => {
-        try {
-          const { id, review } = JSON.parse(e.data);
-          if (isMounted) {
-            setTransfers(prev => prev.map(t => (t.id === id ? { ...t, reviews: [review, ...(t.reviews || [])] } : t)));
-          }
-        } catch {}
-      });
-
       es.addEventListener('new_published', (e) => {
         try {
           const pkg: PublishedPackage = JSON.parse(e.data);
           if (isMounted) {
-            setPublishedPackages(prev => {
-              const idx = prev.findIndex(p => p.id === pkg.id);
-              if (idx >= 0) {
-                const copy = [...prev];
-                copy[idx] = pkg;
-                return copy;
-              }
-              return [pkg, ...prev];
-            });
-          }
-        } catch {}
-      });
-
-      es.addEventListener('published_liked', (e) => {
-        try {
-          const { id, likesCount, likedBy } = JSON.parse(e.data);
-          if (isMounted) {
-            setPublishedPackages(prev => prev.map(p => (p.id === id ? { ...p, likesCount, likedBy } : p)));
-          }
-        } catch {}
-      });
-
-      es.addEventListener('published_downloaded', (e) => {
-        try {
-          const { id, downloadsCount } = JSON.parse(e.data);
-          if (isMounted) {
-            setPublishedPackages(prev => prev.map(p => (p.id === id ? { ...p, downloadsCount } : p)));
+            setPublishedPackages(prev => [pkg, ...prev.filter(p => p.id !== pkg.id)]);
           }
         } catch {}
       });
@@ -461,7 +462,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         try {
           const u: User = JSON.parse(e.data);
           if (isMounted) {
-            setUsers(prev => (prev.some(item => item.username.toLowerCase() === u.username.toLowerCase()) ? prev : [...prev, u]));
+            setUsers(prev => (prev.some(item => item.username.toLowerCase() === u.username.toLowerCase()) ? prev : [...prev, { ...u, avatar: '' }]));
           }
         } catch {}
       });
@@ -470,9 +471,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         try {
           const u: User = JSON.parse(e.data);
           if (isMounted) {
-            setUsers(prev => prev.map(item => (item.username.toLowerCase() === u.username.toLowerCase() ? { ...item, ...u } : item)));
+            setUsers(prev => prev.map(item => (item.username.toLowerCase() === u.username.toLowerCase() ? { ...item, ...u, avatar: '' } : item)));
             if (currentUserRef.current?.username.toLowerCase() === u.username.toLowerCase()) {
-              setCurrentUser(prev => (prev ? { ...prev, ...u } : null));
+              setCurrentUser(prev => (prev ? { ...prev, ...u, avatar: '' } : null));
             }
           }
         } catch {}
@@ -481,7 +482,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const syncWithServer = async () => {
       try {
-        // 1. Sync users
+        // Sync users
         const usersRes = await fetch(apiUrl('/api/users'));
         if (usersRes.ok) {
           const serverUsers: User[] = await usersRes.json();
@@ -491,38 +492,30 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               INITIAL_USERS.forEach(u => map.set(u.username.toLowerCase(), u));
               prev.forEach(u => map.set(u.username.toLowerCase(), u));
               serverUsers.forEach(u => {
-                const existing = map.get(u.username.toLowerCase());
+                const ex = map.get(u.username.toLowerCase());
                 map.set(u.username.toLowerCase(), {
                   ...u,
-                  passwordHash: existing?.passwordHash || hashPassword('password123'),
-                  friends: Array.from(new Set([...(existing?.friends || []), ...(u.friends || [])])),
+                  avatar: '',
+                  passwordHash: ex?.passwordHash || hashPassword('password123'),
+                  friends: Array.from(new Set([...(ex?.friends || []), ...(u.friends || [])])),
+                  selectedTheme: u.selectedTheme || ex?.selectedTheme || 'graphite',
+                  groupPrivacy: u.groupPrivacy || ex?.groupPrivacy || 'friends',
                 });
               });
               return Array.from(map.values());
             });
 
-            // Keep currentUser in sync with fresh friends list & profile from server
             const me = currentUserRef.current;
             if (me) {
               const freshMe = serverUsers.find(u => u.username.toLowerCase() === me.username.toLowerCase());
               if (freshMe) {
-                setCurrentUser(prev => {
-                  if (!prev) return null;
-                  const prevFriends = prev.friends || [];
-                  const newFriends = freshMe.friends || [];
-                  const isDiff =
-                    prevFriends.length !== newFriends.length ||
-                    prevFriends.some((f, idx) => f !== newFriends[idx]) ||
-                    prev.bio !== freshMe.bio ||
-                    prev.avatar !== freshMe.avatar;
-                  return isDiff ? { ...prev, ...freshMe, friends: newFriends } : prev;
-                });
+                setCurrentUser(prev => (prev ? { ...prev, ...freshMe, avatar: '' } : null));
               }
             }
           }
         }
 
-        // 2. Sync friend requests
+        // Sync friend requests
         const reqRes = await fetch(apiUrl('/api/friend-requests'));
         if (reqRes.ok) {
           const serverRequests = await reqRes.json();
@@ -531,110 +524,238 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           }
         }
 
-        // 3. Sync chat messages
+        // Sync groups
+        const userParam = currentUserRef.current ? `?user=${encodeURIComponent(currentUserRef.current.username)}` : '';
+        const groupsRes = await fetch(apiUrl(`/api/groups${userParam}`));
+        if (groupsRes.ok) {
+          const serverGroups: FriendGroup[] = await groupsRes.json();
+          if (isMounted && Array.isArray(serverGroups)) {
+            setGroups(serverGroups);
+          }
+        }
+
+        // Sync chat messages
         const chatRes = await fetch(apiUrl('/api/chat-messages'));
         if (chatRes.ok) {
           const serverMessages: ChatMessage[] = await chatRes.json();
           if (isMounted && Array.isArray(serverMessages)) {
-            setChatMessages(prev => {
-              const map = new Map<string, ChatMessage>();
-              serverMessages.forEach(m => map.set(m.id, m));
-              const now = Date.now();
-              prev.forEach(m => {
-                if (!map.has(m.id)) {
-                  const age = now - new Date(m.createdAt).getTime();
-                  if (age < 15000) {
-                    map.set(m.id, m);
-                  }
-                }
-              });
-              return Array.from(map.values()).sort(
-                (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-              );
-            });
+            setChatMessages(serverMessages);
           }
         }
 
-        // 4. Sync transfers from backend
+        // Sync transfers
         const transferRes = await fetch(apiUrl('/api/transfers'));
         if (transferRes.ok) {
           const serverTransfers: FileTransferPackage[] = await transferRes.json();
           if (isMounted && Array.isArray(serverTransfers)) {
-            setTransfers(prev => {
-              const map = new Map<string, FileTransferPackage>();
-              serverTransfers.forEach(t => map.set(t.id, t));
-              prev.forEach(t => {
-                if (!map.has(t.id)) map.set(t.id, t);
-              });
-              return Array.from(map.values()).sort(
-                (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-              );
-            });
+            setTransfers(serverTransfers);
           }
         }
 
-        // 5. Sync published community packages from backend
+        // Sync published packages
         const pubRes = await fetch(apiUrl('/api/published'));
         if (pubRes.ok) {
           const serverPub: PublishedPackage[] = await pubRes.json();
           if (isMounted && Array.isArray(serverPub)) {
-            setPublishedPackages(prev => {
-              const map = new Map<string, PublishedPackage>();
-              serverPub.forEach(p => map.set(p.id, p));
-              prev.forEach(p => {
-                if (!map.has(p.id)) map.set(p.id, p);
-              });
-              return Array.from(map.values()).sort(
-                (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-              );
-            });
+            setPublishedPackages(serverPub);
           }
         }
-      } catch {
-        // Offline or fallback mode
-      }
+      } catch {}
     };
 
     syncWithServer();
-    const interval = setInterval(syncWithServer, 2000);
+    const interval = setInterval(syncWithServer, 3000);
     window.addEventListener('focus', syncWithServer);
 
     return () => {
       isMounted = false;
-      if (es) {
-        es.close();
-      }
+      if (es) es.close();
       clearInterval(interval);
       window.removeEventListener('focus', syncWithServer);
     };
   }, []);
 
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const transferParam = params.get('transfer');
-    if (transferParam) {
-      setActiveTransferPortalId(transferParam);
+  // Theme update action
+  const setThemeAction = async (themeId: ThemeId) => {
+    setSelectedTheme(themeId);
+    applyThemeToDocument(themeId);
+    if (currentUser) {
+      setCurrentUser(prev => (prev ? { ...prev, selectedTheme: themeId } : null));
+      setUsers(prev =>
+        prev.map(u => (u.username.toLowerCase() === currentUser.username.toLowerCase() ? { ...u, selectedTheme: themeId } : u))
+      );
+      try {
+        await fetch(apiUrl(`/api/users/${encodeURIComponent(currentUser.username)}/settings`), {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ selectedTheme: themeId }),
+        });
+      } catch {}
     }
-  }, []);
-
-  const toggleTheme = () => {
-    setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
   };
 
-  // User Avatar update (persisted to server & locally)
-  const updateUserAvatar = async (newAvatar: string) => {
-    if (!currentUser) return;
-    setCurrentUser(prev => (prev ? { ...prev, avatar: newAvatar } : null));
-    setUsers(prev =>
-      prev.map(u => (u.username.toLowerCase() === currentUser.username.toLowerCase() ? { ...u, avatar: newAvatar } : u))
-    );
+  // Group privacy update action
+  const setGroupPrivacyAction = async (privacy: GroupPrivacySetting) => {
+    setGroupPrivacy(privacy);
+    if (currentUser) {
+      setCurrentUser(prev => (prev ? { ...prev, groupPrivacy: privacy } : null));
+      setUsers(prev =>
+        prev.map(u => (u.username.toLowerCase() === currentUser.username.toLowerCase() ? { ...u, groupPrivacy: privacy } : u))
+      );
+      try {
+        await fetch(apiUrl(`/api/users/${encodeURIComponent(currentUser.username)}/settings`), {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ groupPrivacy: privacy }),
+        });
+      } catch {}
+    }
+  };
+
+  // Friend Groups Management
+  const createGroupAction = async (name: string, members: string[] = []) => {
+    if (!currentUser) return { success: false, error: 'Must be logged in to create a group.' };
+    const cleanName = name.trim();
+    if (!cleanName) return { success: false, error: 'Group name is required.' };
+
     try {
-      await fetch(apiUrl(`/api/users/${encodeURIComponent(currentUser.username)}/avatar`), {
+      const res = await fetch(apiUrl('/api/groups'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ avatar: newAvatar }),
+        body: JSON.stringify({
+          name: cleanName,
+          ownerUsername: currentUser.username,
+          members: [currentUser.username, ...members],
+        }),
       });
-    } catch {}
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        return { success: false, error: err.error || 'Failed to create group.' };
+      }
+
+      const data = await res.json();
+      if (data.group) {
+        setGroups(prev => [data.group, ...prev.filter(g => g.id !== data.group.id)]);
+        setActiveGroupId(data.group.id);
+        return { success: true, group: data.group };
+      }
+      return { success: true };
+    } catch {
+      // Local fallback
+      const grp = createFriendGroup(currentUser.username, cleanName, members);
+      setGroups(prev => [grp, ...prev]);
+      setActiveGroupId(grp.id);
+      return { success: true, group: grp };
+    }
+  };
+
+  const renameGroupAction = async (groupId: string, name: string) => {
+    const cleanName = name.trim();
+    if (!cleanName) return { success: false, error: 'Group name is required.' };
+
+    setGroups(prev => prev.map(g => (g.id === groupId ? { ...g, name: cleanName, updatedAt: new Date().toISOString() } : g)));
+
+    try {
+      const res = await fetch(apiUrl(`/api/groups/${encodeURIComponent(groupId)}`), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: cleanName }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        return { success: false, error: err.error || 'Failed to rename group.' };
+      }
+      return { success: true };
+    } catch {
+      return { success: true };
+    }
+  };
+
+  const deleteGroupAction = async (groupId: string) => {
+    setGroups(prev => prev.filter(g => g.id !== groupId));
+    if (activeGroupId === groupId) setActiveGroupId(null);
+
+    try {
+      await fetch(apiUrl(`/api/groups/${encodeURIComponent(groupId)}`), { method: 'DELETE' });
+      return { success: true };
+    } catch {
+      return { success: true };
+    }
+  };
+
+  const addMemberToGroupAction = async (groupId: string, targetUsername: string) => {
+    if (!currentUser) return { success: false, error: 'Sign in to manage groups.' };
+    const cleanTarget = targetUsername.replace(/^@/, '').trim().toLowerCase();
+
+    // Check existence & privacy first
+    let targetUser = users.find(u => u.username.toLowerCase() === cleanTarget);
+    if (!targetUser) {
+      try {
+        const checkRes = await fetch(apiUrl(`/api/users/${encodeURIComponent(cleanTarget)}`));
+        if (checkRes.ok) {
+          targetUser = await checkRes.json();
+        }
+      } catch {}
+    }
+
+    if (!targetUser) {
+      return { success: false, error: `User @${cleanTarget} does not exist.` };
+    }
+
+    // Client-side privacy check
+    const check = canAddToGroup(targetUser, currentUser.username);
+    if (!check.allowed) {
+      return { success: false, error: check.error };
+    }
+
+    try {
+      const res = await fetch(apiUrl(`/api/groups/${encodeURIComponent(groupId)}/members`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: cleanTarget, adderUsername: currentUser.username }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        return { success: false, error: err.error || 'Failed to add friend to group.' };
+      }
+
+      const data = await res.json();
+      if (data.group) {
+        setGroups(prev => prev.map(g => (g.id === groupId ? data.group : g)));
+      }
+      return { success: true };
+    } catch {
+      setGroups(prev =>
+        prev.map(g =>
+          g.id === groupId
+            ? { ...g, memberUsernames: Array.from(new Set([...g.memberUsernames, cleanTarget])) }
+            : g
+        )
+      );
+      return { success: true };
+    }
+  };
+
+  const removeMemberFromGroupAction = async (groupId: string, memberUsername: string) => {
+    const clean = memberUsername.replace(/^@/, '').trim().toLowerCase();
+    setGroups(prev =>
+      prev.map(g =>
+        g.id === groupId
+          ? { ...g, memberUsernames: g.memberUsernames.filter(m => m.toLowerCase() !== clean) }
+          : g
+      )
+    );
+
+    try {
+      await fetch(apiUrl(`/api/groups/${encodeURIComponent(groupId)}/members/${encodeURIComponent(clean)}`), {
+        method: 'DELETE',
+      });
+      return { success: true };
+    } catch {
+      return { success: true };
+    }
   };
 
   // Global search for user accounts across the platform
@@ -647,21 +768,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const res = await fetch(apiUrl('/api/users'));
         if (res.ok) remoteUsers = await res.json();
       } else {
-        // 1. Try search with query parameters
         const res1 = await fetch(apiUrl(`/api/users/search?q=${encodeURIComponent(clean)}${excludeParam}`));
         if (res1.ok) {
           remoteUsers = await res1.json();
         } else {
-          // 2. Fallback to path parameter format
           const res2 = await fetch(apiUrl(`/api/users/search/${encodeURIComponent(clean)}`));
-          if (res2.ok) {
-            remoteUsers = await res2.json();
-          }
+          if (res2.ok) remoteUsers = await res2.json();
         }
       }
 
       if (Array.isArray(remoteUsers)) {
-        // Cache newly discovered users
         setUsers(prev => {
           const map = new Map<string, User>();
           prev.forEach(u => map.set(u.username.toLowerCase(), u));
@@ -669,51 +785,44 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             const ex = map.get(u.username.toLowerCase());
             map.set(u.username.toLowerCase(), {
               ...u,
+              avatar: '',
               passwordHash: ex?.passwordHash || hashPassword('password123'),
               friends: Array.from(new Set([...(ex?.friends || []), ...(u.friends || [])])),
+              selectedTheme: u.selectedTheme || ex?.selectedTheme || 'graphite',
+              groupPrivacy: u.groupPrivacy || ex?.groupPrivacy || 'friends',
             });
           });
           return Array.from(map.values());
         });
 
-        // Always exclude the current user from search results
-        const filtered = currentUser
+        return currentUser
           ? remoteUsers.filter(u => u.username.toLowerCase() !== currentUser.username.toLowerCase())
           : remoteUsers;
-        return filtered;
       }
-    } catch (err) {
-      console.warn('[Noir Archive] Account search network error:', err);
-    }
+    } catch {}
 
     return users.filter(
       u =>
         (!currentUser || u.username.toLowerCase() !== currentUser.username.toLowerCase()) &&
-        (u.username.toLowerCase().includes(clean) || (u.bio && u.bio.toLowerCase().includes(clean)))
+        u.username.toLowerCase().includes(clean)
     );
   };
 
-  // Auth operations (purely username and password, strictly persisted to Supabase)
+  // Auth Operations
   const signUp = async (data: {
     username: string;
     password: string;
     bio?: string;
     location?: string;
-    avatar?: string;
   }): Promise<{ success: boolean; error?: string }> => {
     const userVal = validateUsername(data.username, users);
-    if (!userVal.isValid) {
-      return { success: false, error: userVal.error };
-    }
+    if (!userVal.isValid) return { success: false, error: userVal.error };
 
     const passVal = validatePassword(data.password);
-    if (!passVal.isValid) {
-      return { success: false, error: passVal.feedback };
-    }
+    if (!passVal.isValid) return { success: false, error: passVal.feedback };
 
     const cleanUsername = data.username.trim().toLowerCase();
 
-    // Persist directly to production cloud server
     try {
       const res = await fetch(apiUrl('/api/auth/signup'), {
         method: 'POST',
@@ -721,9 +830,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         body: JSON.stringify({
           username: cleanUsername,
           password: data.password,
-          bio: data.bio?.trim() || 'Visual artist and photographer.',
-          avatar: data.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80',
+          bio: data.bio?.trim() || 'Noir Archive file sharing member.',
           location: data.location?.trim() || 'Worldwide',
+          selectedTheme: 'graphite',
+          groupPrivacy: 'friends',
         }),
       });
 
@@ -733,26 +843,28 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
 
       const resData = await res.json();
-      if (!resData.user) {
-        return { success: false, error: 'Malformed server response' };
-      }
+      if (!resData.user) return { success: false, error: 'Malformed server response' };
 
       const authenticatedUser: User = {
         ...resData.user,
+        avatar: '',
         passwordHash: hashPassword(data.password),
         friends: resData.user.friends || [],
+        selectedTheme: 'graphite',
+        groupPrivacy: 'friends',
       };
 
       setUsers(prev => [...prev.filter(u => u.username.toLowerCase() !== cleanUsername), authenticatedUser]);
       setCurrentUser(authenticatedUser);
       setAuthModal(null);
+      setSelectedTheme('graphite');
+      applyThemeToDocument('graphite');
 
       return { success: true };
     } catch (err: any) {
-      console.error('[Noir Archive] Signup error:', err);
       return {
         success: false,
-        error: 'Cannot connect to Noir Archive cloud service (https://noirarchive.onrender.com). Please check your internet connection.',
+        error: 'Cannot connect to Noir Archive cloud service. Please check your internet connection.',
       };
     }
   };
@@ -760,7 +872,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const signIn = async (username: string, pass: string): Promise<{ success: boolean; error?: string }> => {
     const normalized = username.trim().toLowerCase();
 
-    // Authenticate strictly with the production cloud server
     try {
       const res = await fetch(apiUrl('/api/auth/signin'), {
         method: 'POST',
@@ -773,8 +884,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (data.user) {
           const authenticatedUser: User = {
             ...data.user,
+            avatar: '',
             passwordHash: hashPassword(pass),
             friends: data.user.friends || [],
+            selectedTheme: data.user.selectedTheme || 'graphite',
+            groupPrivacy: data.user.groupPrivacy || 'friends',
           };
           setUsers(prev => {
             const map = new Map<string, User>();
@@ -784,17 +898,27 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           });
           setCurrentUser(authenticatedUser);
           setAuthModal(null);
+
+          // Restore saved theme
+          const userTheme = authenticatedUser.selectedTheme || 'graphite';
+          setSelectedTheme(userTheme);
+          applyThemeToDocument(userTheme);
+
+          // Restore group privacy
+          if (authenticatedUser.groupPrivacy) {
+            setGroupPrivacy(authenticatedUser.groupPrivacy);
+          }
+
           return { success: true };
         }
       }
 
       const err = await res.json().catch(() => ({}));
       return { success: false, error: err.error || 'Invalid username or password' };
-    } catch (err: any) {
-      console.error('[Noir Archive] SignIn error:', err);
+    } catch {
       return {
         success: false,
-        error: 'Cannot connect to Noir Archive cloud service (https://noirarchive.onrender.com). Please check your internet connection.',
+        error: 'Cannot connect to Noir Archive service. Please check your connection.',
       };
     }
   };
@@ -811,103 +935,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const target = users.find(u => u.username.toLowerCase() === username.toLowerCase());
     if (target) {
       setCurrentUser(target);
-    }
-  };
-
-  // Project Management
-  const createProject = (data: {
-    title: string;
-    description: string;
-    category: PhotoCategory;
-    layoutPreference: GridLayout;
-    coverPhotoUrl?: string;
-    clientDeliveryNotes?: string;
-    clientName?: string;
-  }) => {
-    if (!currentUser) throw new Error('Must be signed in to create projects');
-
-    const newProject: Project = {
-      id: `proj-${Date.now()}`,
-      userId: currentUser.id,
-      title: data.title.trim(),
-      description: data.description.trim(),
-      coverPhotoUrl:
-        data.coverPhotoUrl ||
-        'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=1200&q=85',
-      layoutPreference: data.layoutPreference || 'grid-3',
-      isPublic: true,
-      category: data.category,
-      createdAt: new Date().toISOString(),
-      clientDeliveryNotes: data.clientDeliveryNotes?.trim() || undefined,
-      clientName: data.clientName?.trim() || undefined,
-    };
-
-    setProjects(prev => [newProject, ...prev]);
-    return newProject;
-  };
-
-  const updateProject = (id: string, updates: Partial<Project>) => {
-    setProjects(prev => prev.map(p => (p.id === id ? { ...p, ...updates } : p)));
-    if (selectedProject?.id === id) {
-      setSelectedProject(prev => (prev ? { ...prev, ...updates } : null));
-    }
-  };
-
-  const deleteProject = (id: string) => {
-    setProjects(prev => prev.filter(p => p.id !== id));
-    setPhotos(prev => prev.filter(ph => ph.projectId !== id));
-    if (selectedProject?.id === id) {
-      setSelectedProject(null);
-    }
-  };
-
-  const addPhoto = (photoData: Omit<Photo, 'id' | 'createdAt' | 'userId'>) => {
-    if (!currentUser) throw new Error('Must be signed in to add photos');
-
-    const newPhoto: Photo = {
-      ...photoData,
-      id: `ph-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-      userId: currentUser.id,
-      createdAt: new Date().toISOString(),
-    };
-
-    setPhotos(prev => [newPhoto, ...prev]);
-
-    const proj = projects.find(p => p.id === photoData.projectId);
-    if (proj && !proj.coverPhotoUrl) {
-      updateProject(proj.id, { coverPhotoUrl: newPhoto.url });
-    }
-
-    return newPhoto;
-  };
-
-  const deletePhoto = (id: string) => {
-    setPhotos(prev => prev.filter(p => p.id !== id));
-    if (lightboxPhoto?.id === id) {
-      setLightboxPhoto(null);
-    }
-  };
-
-  const updatePhoto = (id: string, updates: Partial<Photo>) => {
-    setPhotos(prev => prev.map(p => (p.id === id ? { ...p, ...updates } : p)));
-    if (lightboxPhoto?.id === id) {
-      setLightboxPhoto(prev => (prev ? { ...prev, ...updates } : null));
+      if (target.selectedTheme) {
+        setSelectedTheme(target.selectedTheme);
+        applyThemeToDocument(target.selectedTheme);
+      }
+      if (target.groupPrivacy) {
+        setGroupPrivacy(target.groupPrivacy);
+      }
     }
   };
 
   // Transfers
-  const openTransferModalForProject = (project: Project) => {
-    setPreselectedTransferProject(project);
-    setIsTransferModalOpen(true);
-  };
-
   const sendTransfer = (input: CreateTransferInput) => {
     try {
       const pkg = createTransferPackage(input);
       setTransfers(prev => [pkg, ...prev]);
-      setPreselectedTransferProject(null);
 
-      // Persist to server for global client delivery
       try {
         fetch(apiUrl('/api/transfers'), {
           method: 'POST',
@@ -924,47 +967,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const revokeTransfer = (id: string) => {
-    setTransfers(prev =>
-      prev.map(t => (t.id === id ? { ...t, status: 'revoked' } : t))
-    );
+    setTransfers(prev => prev.map(t => (t.id === id ? { ...t, status: 'revoked' } : t)));
     try {
       fetch(apiUrl(`/api/transfers/${encodeURIComponent(id)}/revoke`), { method: 'POST' }).catch(() => {});
     } catch {}
   };
 
   const recordDownload = (id: string) => {
-    setTransfers(prev =>
-      prev.map(t => (t.id === id ? { ...t, downloadsCount: t.downloadsCount + 1 } : t))
-    );
+    setTransfers(prev => prev.map(t => (t.id === id ? { ...t, downloadsCount: t.downloadsCount + 1 } : t)));
     try {
       fetch(apiUrl(`/api/transfers/${encodeURIComponent(id)}/download`), { method: 'POST' }).catch(() => {});
     } catch {}
   };
 
-  const addTransferReview = (id: string, review: Omit<ClientReview, 'id' | 'createdAt'>) => {
-    const newRev: ClientReview = {
-      ...review,
-      id: `rev-${Date.now()}`,
-      createdAt: new Date().toISOString(),
-    };
-    setTransfers(prev =>
-      prev.map(t =>
-        t.id === id ? { ...t, reviews: [newRev, ...(t.reviews || [])] } : t
-      )
-    );
-    try {
-      fetch(apiUrl(`/api/transfers/${encodeURIComponent(id)}/review`), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(review),
-      }).catch(() => {});
-    } catch {}
-  };
-
-  // Friends & Chat operations
+  // Friend Requests
   const sendFriendRequestAction = async (toUsername: string): Promise<{ success: boolean; error?: string }> => {
     if (!currentUser) return { success: false, error: 'Sign in to add friends.' };
-
     const cleanTo = toUsername.replace(/^@/, '').trim().toLowerCase();
     if (!cleanTo) return { success: false, error: 'Recipient username is required.' };
 
@@ -976,16 +994,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       return { success: false, error: `@${cleanTo} is already in your friends list.` };
     }
 
-    // Check if target user exists in local state or INITIAL_USERS
     let targetUser = users.find(u => u.username.toLowerCase() === cleanTo);
     if (!targetUser) {
       targetUser = INITIAL_USERS.find(u => u.username.toLowerCase() === cleanTo);
-      if (targetUser) {
-        setUsers(prev => [...prev, targetUser!]);
-      }
+      if (targetUser) setUsers(prev => [...prev, targetUser!]);
     }
 
-    // If still not found, query backend server to see if user was recently registered
     if (!targetUser) {
       try {
         const checkRes = await fetch(apiUrl(`/api/users/${encodeURIComponent(cleanTo)}`));
@@ -999,7 +1013,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       } catch {}
     }
 
-    // STRICT CHECK: User MUST exist to send a friend request!
     if (!targetUser) {
       return { success: false, error: `User @${cleanTo} does not exist.` };
     }
@@ -1017,7 +1030,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       return { success: false, error: `A friend request to @${targetUser.username} is already pending.` };
     }
 
-    // Send strictly to production backend server
     try {
       const res = await fetch(apiUrl('/api/friend-requests'), {
         method: 'POST',
@@ -1035,12 +1047,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setFriendRequests(prev => [data.request, ...prev.filter(r => r.id !== data.request.id)]);
       }
       return { success: true };
-    } catch (err: any) {
-      console.error('[Noir Archive] Send friend request error:', err);
-      return {
-        success: false,
-        error: 'Cloud sync error: Unable to reach Noir Archive cloud server (https://noirarchive.onrender.com). Please check your connection.',
-      };
+    } catch {
+      const fallbackReq = createFriendRequest(currentUser.username, targetUser.username);
+      setFriendRequests(prev => [fallbackReq, ...prev]);
+      return { success: true };
     }
   };
 
@@ -1048,7 +1058,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     try {
       fetch(apiUrl(`/api/friend-requests/${encodeURIComponent(requestId)}/cancel`), { method: 'POST' }).catch(() => {});
     } catch {}
-
     setFriendRequests(prev => prev.filter(r => r.id !== requestId));
   };
 
@@ -1060,10 +1069,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       fetch(apiUrl(`/api/friend-requests/${encodeURIComponent(requestId)}/accept`), { method: 'POST' }).catch(() => {});
     } catch {}
 
-    setFriendRequests(prev =>
-      prev.map(r => (r.id === requestId ? { ...r, status: 'accepted' } : r))
-    );
-
+    setFriendRequests(prev => prev.map(r => (r.id === requestId ? { ...r, status: 'accepted' } : r)));
     const friendName = req.fromUsername.toLowerCase() === currentUser.username.toLowerCase()
       ? req.toUsername
       : req.fromUsername;
@@ -1071,12 +1077,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setUsers(prev =>
       prev.map(u => {
         if (u.username.toLowerCase() === currentUser.username.toLowerCase()) {
-          const updated = Array.from(new Set([...(u.friends || []), friendName]));
-          return { ...u, friends: updated };
+          return { ...u, friends: Array.from(new Set([...(u.friends || []), friendName])) };
         }
         if (u.username.toLowerCase() === friendName.toLowerCase()) {
-          const updated = Array.from(new Set([...(u.friends || []), currentUser.username]));
-          return { ...u, friends: updated };
+          return { ...u, friends: Array.from(new Set([...(u.friends || []), currentUser.username])) };
         }
         return u;
       })
@@ -1091,10 +1095,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     try {
       fetch(apiUrl(`/api/friend-requests/${encodeURIComponent(requestId)}/decline`), { method: 'POST' }).catch(() => {});
     } catch {}
-
-    setFriendRequests(prev =>
-      prev.map(r => (r.id === requestId ? { ...r, status: 'declined' } : r))
-    );
+    setFriendRequests(prev => prev.map(r => (r.id === requestId ? { ...r, status: 'declined' } : r)));
   };
 
   const sendChatMessageAction = (
@@ -1151,7 +1152,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const togglePublishedLikeAction = (id: string) => {
-    const username = currentUser?.username || 'anonymous_admirer';
+    const username = currentUser?.username || 'member';
     setPublishedPackages(prev =>
       prev.map(p => {
         if (p.id !== id) return p;
@@ -1168,6 +1169,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     } catch {}
   };
 
+  // Stubs for backward compat
+  const [selectedPhotographer, setSelectedPhotographer] = useState<User | null>(null);
+  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+  const [lightboxPhoto, setLightboxPhoto] = useState<Photo | null>(null);
+  const [gridLayout, setGridLayout] = useState<any>('grid-3');
+  const [selectedCategory, setSelectedCategory] = useState<any>('all');
+  const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
+  const [projects, setProjects] = useState<Project[]>(INITIAL_PROJECTS);
+  const [photos, setPhotos] = useState<Photo[]>(INITIAL_PHOTOS);
+
   return (
     <AppContext.Provider
       value={{
@@ -1178,22 +1189,24 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         transfers,
         friendRequests,
         chatMessages,
+        groups,
         activeTab,
         setActiveTab,
-        selectedPhotographer,
-        setSelectedPhotographer,
-        selectedProject,
-        setSelectedProject,
-        lightboxPhoto,
-        setLightboxPhoto,
-        gridLayout,
-        setGridLayout,
-        selectedCategory,
-        setSelectedCategory,
-        theme,
-        toggleTheme,
         searchQuery,
         setSearchQuery,
+        selectedTheme,
+        setThemeAction,
+        theme: selectedTheme === 'graphite' ? 'dark' : 'dark', // Always comfortable dark charcoal
+        toggleTheme: () => setThemeAction(selectedTheme === 'graphite' ? 'monochrome' : 'graphite'),
+        groupPrivacy,
+        setGroupPrivacyAction,
+        activeGroupId,
+        setActiveGroupId,
+        createGroupAction,
+        renameGroupAction,
+        deleteGroupAction,
+        addMemberToGroupAction,
+        removeMemberFromGroupAction,
         authModal,
         setAuthModal,
         signUp,
@@ -1201,23 +1214,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         signOut,
         switchUserQuick,
         searchAccountsGlobally,
-        isAvatarModalOpen,
-        setIsAvatarModalOpen,
-        updateUserAvatar,
-        createProject,
-        updateProject,
-        deleteProject,
-        addPhoto,
-        deletePhoto,
-        updatePhoto,
         isTransferModalOpen,
         setIsTransferModalOpen,
-        preselectedTransferProject,
-        openTransferModalForProject,
         sendTransfer,
         revokeTransfer,
         recordDownload,
-        addTransferReview,
         activeTransferPortalId,
         setActiveTransferPortalId,
         activeChatFriend,
@@ -1233,6 +1234,28 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         togglePublishedLikeAction,
         isPublishModalOpen,
         setIsPublishModalOpen,
+        selectedPhotographer,
+        setSelectedPhotographer,
+        selectedProject,
+        setSelectedProject,
+        lightboxPhoto,
+        setLightboxPhoto,
+        gridLayout,
+        setGridLayout,
+        selectedCategory,
+        setSelectedCategory,
+        isAvatarModalOpen,
+        setIsAvatarModalOpen,
+        updateUserAvatar: async () => {},
+        createProject: (d: any) => ({ ...d, id: `p-${Date.now()}` }),
+        updateProject: () => {},
+        deleteProject: () => {},
+        addPhoto: (p: any) => ({ ...p, id: `ph-${Date.now()}` }),
+        deletePhoto: () => {},
+        updatePhoto: () => {},
+        preselectedTransferProject: null,
+        openTransferModalForProject: () => {},
+        addTransferReview: () => {},
       }}
     >
       {children}

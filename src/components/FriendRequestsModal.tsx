@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
+import { UserAvatar } from './UserAvatar';
 import {
   X,
   Users,
@@ -28,13 +29,10 @@ export const FriendRequestsModal: React.FC<FriendRequestsModalProps> = ({
     acceptFriendRequestAction,
     declineFriendRequestAction,
     cancelFriendRequestAction,
-    theme,
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'incoming' | 'sent'>('incoming');
   const [feedback, setFeedback] = useState<string | null>(null);
-
-  const isLight = theme === 'light';
 
   // Keyboard escape handler
   useEffect(() => {
@@ -60,10 +58,6 @@ export const FriendRequestsModal: React.FC<FriendRequestsModalProps> = ({
       r.fromUsername.toLowerCase() === currentUser.username.toLowerCase() &&
       r.status === 'pending'
   );
-
-  const getUserDetails = (username: string) => {
-    return users.find(u => u.username.toLowerCase() === username.toLowerCase());
-  };
 
   const handleAccept = (requestId: string, fromUsername: string) => {
     acceptFriendRequestAction(requestId);
@@ -92,39 +86,28 @@ export const FriendRequestsModal: React.FC<FriendRequestsModalProps> = ({
       />
 
       {/* Modal Dialog */}
-      <div
-        className={`relative z-10 w-full max-w-lg rounded-2xl border shadow-2xl transition-all overflow-hidden ${
-          isLight
-            ? 'bg-amber-50/95 border-amber-300 text-stone-900 shadow-orange-500/10'
-            : 'bg-[#140b07] border-orange-500/30 text-white shadow-2xl shadow-orange-950/60'
-        }`}
-      >
+      <div className="relative z-10 w-full max-w-lg rounded-2xl border shadow-2xl bg-[#2b2d31] border-[#383a40] text-white overflow-hidden">
         {/* Header */}
-        <div
-          className={`flex items-center justify-between border-b px-6 py-4 ${
-            isLight ? 'border-amber-200 bg-amber-50/70' : 'border-orange-500/20 bg-[#140b07]'
-          }`}
-        >
+        <div className="flex items-center justify-between border-b px-6 py-4 border-[#383a40] bg-[#232428]">
           <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-orange-500/10 text-[#ff6b00]">
+            <div
+              className="flex h-8 w-8 items-center justify-center rounded-xl text-white"
+              style={{ backgroundColor: 'var(--color-accent, #5865f2)' }}
+            >
               <Users className="h-4 w-4" />
             </div>
             <div>
-              <h2 className="font-sans text-base font-bold tracking-tight">
+              <h2 className="font-sans text-base font-bold tracking-tight text-white">
                 Friend Requests Hub
               </h2>
-              <p className={`text-[11px] ${isLight ? 'text-stone-500' : 'text-neutral-400'}`}>
+              <p className="text-[11px] text-neutral-400">
                 Review incoming requests and manage sent invitations
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className={`rounded-full p-1.5 transition-colors ${
-              isLight
-                ? 'text-stone-400 hover:bg-amber-100 hover:text-stone-700'
-                : 'text-neutral-400 hover:bg-[#22130c] hover:text-white'
-            }`}
+            className="rounded-xl p-1.5 text-neutral-400 hover:bg-[#313338] hover:text-white transition-colors"
             aria-label="Close friend requests modal"
           >
             <X className="h-4 w-4" />
@@ -133,30 +116,29 @@ export const FriendRequestsModal: React.FC<FriendRequestsModalProps> = ({
 
         {/* Action Feedback Banner */}
         {feedback && (
-          <div className="border-b border-orange-500/20 bg-orange-500/10 px-6 py-2.5 font-sans text-xs text-[#ff6b00] flex items-center gap-2">
+          <div className="border-b px-6 py-2.5 font-sans text-xs bg-emerald-500/10 border-emerald-500/30 text-emerald-400 flex items-center gap-2">
             <UserCheck className="h-4 w-4 shrink-0" />
             <span>{feedback}</span>
           </div>
         )}
 
         {/* Tab Selector */}
-        <div
-          className={`flex border-b px-6 pt-3 gap-6 font-mono-code text-xs ${
-            isLight ? 'border-amber-200' : 'border-orange-500/20'
-          }`}
-        >
+        <div className="flex border-b px-6 pt-3 gap-6 font-mono-code text-xs border-[#383a40]">
           <button
             onClick={() => setActiveTab('incoming')}
             className={`flex items-center gap-2 pb-3 border-b-2 font-medium transition-colors ${
               activeTab === 'incoming'
-                ? 'border-[#ff6b00] text-[#ff6b00] font-bold'
-                : `border-transparent ${isLight ? 'text-stone-500 hover:text-stone-800' : 'text-neutral-400 hover:text-white'}`
+                ? 'border-[var(--color-accent,#5865f2)] text-white font-bold'
+                : 'border-transparent text-neutral-400 hover:text-white'
             }`}
           >
             <Inbox className="h-3.5 w-3.5" />
             <span>Incoming</span>
             {incomingRequests.length > 0 && (
-              <span className="ml-1 rounded-full bg-[#ff6b00] px-2 py-0.5 text-[10px] font-bold text-black">
+              <span
+                className="ml-1 rounded-full px-2 py-0.5 text-[10px] font-bold text-white"
+                style={{ backgroundColor: 'var(--color-accent, #5865f2)' }}
+              >
                 {incomingRequests.length}
               </span>
             )}
@@ -166,16 +148,14 @@ export const FriendRequestsModal: React.FC<FriendRequestsModalProps> = ({
             onClick={() => setActiveTab('sent')}
             className={`flex items-center gap-2 pb-3 border-b-2 font-medium transition-colors ${
               activeTab === 'sent'
-                ? 'border-[#ff6b00] text-[#ff6b00] font-bold'
-                : `border-transparent ${isLight ? 'text-stone-500 hover:text-stone-800' : 'text-neutral-400 hover:text-white'}`
+                ? 'border-[var(--color-accent,#5865f2)] text-white font-bold'
+                : 'border-transparent text-neutral-400 hover:text-white'
             }`}
           >
             <Send className="h-3.5 w-3.5" />
             <span>Sent Out</span>
             {sentRequests.length > 0 && (
-              <span className={`ml-1 rounded-full px-2 py-0.5 text-[10px] ${
-                isLight ? 'bg-amber-100 text-stone-700' : 'bg-[#22130c] text-orange-300'
-              }`}>
+              <span className="ml-1 rounded-full px-2 py-0.5 text-[10px] bg-[#1e1f22] text-neutral-300">
                 {sentRequests.length}
               </span>
             )}
@@ -186,8 +166,8 @@ export const FriendRequestsModal: React.FC<FriendRequestsModalProps> = ({
         <div className="p-6">
           {activeTab === 'incoming' ? (
             incomingRequests.length === 0 ? (
-              <div className="py-12 text-center font-mono-code text-xs opacity-60">
-                <Inbox className="mx-auto h-8 w-8 mb-2 opacity-50 text-orange-400" />
+              <div className="py-12 text-center font-mono-code text-xs text-neutral-400">
+                <Inbox className="mx-auto h-8 w-8 mb-2 opacity-50 text-neutral-500" />
                 <p>No incoming friend requests right now.</p>
               </div>
             ) : (
@@ -198,20 +178,14 @@ export const FriendRequestsModal: React.FC<FriendRequestsModalProps> = ({
                   return (
                     <div
                       key={req.id}
-                      className={`flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3.5 rounded-xl border transition-colors ${
-                        isLight ? 'border-amber-200 bg-amber-50/40' : 'border-orange-500/20 bg-[#160d09]'
-                      }`}
+                      className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3.5 rounded-2xl border border-[#383a40] bg-[#232428] transition-colors"
                     >
                       <div className="flex items-center gap-3 min-w-0">
-                        <img
-                          src={userDetail?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80'}
-                          alt={req.fromUsername}
-                          className="h-10 w-10 rounded-full object-cover ring-1 ring-orange-500/30 shrink-0"
-                        />
+                        <UserAvatar username={req.fromUsername} size="md" />
                         <div className="min-w-0">
-                          <p className="font-mono-code text-xs font-bold text-[#ff6b00]">@{req.fromUsername}</p>
-                          <p className={`text-[11px] line-clamp-1 ${isLight ? 'text-stone-500' : 'text-neutral-400'}`}>
-                            {userDetail?.bio || 'Wants to connect and exchange portfolios.'}
+                          <p className="font-mono-code text-xs font-bold text-white">@{req.fromUsername}</p>
+                          <p className="text-[11px] line-clamp-1 text-neutral-400">
+                            {userDetail?.bio || 'Wants to connect on Noir Archive.'}
                           </p>
                         </div>
                       </div>
@@ -219,18 +193,15 @@ export const FriendRequestsModal: React.FC<FriendRequestsModalProps> = ({
                       <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
                         <button
                           onClick={() => handleAccept(req.id, req.fromUsername)}
-                          className="flex items-center gap-1.5 rounded-lg bg-[#ff6b00] px-3.5 py-1.5 font-sans text-xs font-bold text-black shadow-sm hover:bg-[#ff7d1f] transition-all"
+                          className="flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 font-sans text-xs font-bold text-white shadow-sm hover:brightness-110 transition-all"
+                          style={{ backgroundColor: 'var(--color-accent, #5865f2)' }}
                         >
                           <Check className="h-3.5 w-3.5 stroke-[2.5]" />
                           <span>Accept</span>
                         </button>
                         <button
                           onClick={() => handleDecline(req.id, req.fromUsername)}
-                          className={`flex items-center gap-1 rounded-lg border px-3 py-1.5 font-sans text-xs transition-colors ${
-                            isLight
-                              ? 'border-amber-300 text-stone-600 hover:bg-amber-100 hover:text-red-600'
-                              : 'border-orange-500/30 text-neutral-300 hover:bg-[#22130c] hover:text-red-400'
-                          }`}
+                          className="flex items-center gap-1 rounded-xl border px-3 py-1.5 font-sans text-xs border-[#383a40] text-neutral-300 hover:bg-[#313338] hover:text-rose-400 transition-colors"
                         >
                           <X className="h-3.5 w-3.5" />
                           <span>Decline</span>
@@ -243,31 +214,23 @@ export const FriendRequestsModal: React.FC<FriendRequestsModalProps> = ({
             )
           ) : (
             sentRequests.length === 0 ? (
-              <div className="py-12 text-center font-mono-code text-xs opacity-60">
-                <Send className="mx-auto h-8 w-8 mb-2 opacity-50 text-orange-400" />
+              <div className="py-12 text-center font-mono-code text-xs text-neutral-400">
+                <Send className="mx-auto h-8 w-8 mb-2 opacity-50 text-neutral-500" />
                 <p>No pending friend requests sent out.</p>
               </div>
             ) : (
               <div className="space-y-3">
                 {sentRequests.map(req => {
-                  const targetUser = users.find(u => u.username.toLowerCase() === req.toUsername.toLowerCase());
-
                   return (
                     <div
                       key={req.id}
-                      className={`flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3.5 rounded-xl border transition-colors ${
-                        isLight ? 'border-amber-200 bg-amber-50/40' : 'border-orange-500/20 bg-[#160d09]'
-                      }`}
+                      className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3.5 rounded-2xl border border-[#383a40] bg-[#232428] transition-colors"
                     >
                       <div className="flex items-center gap-3 min-w-0">
-                        <img
-                          src={targetUser?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80'}
-                          alt={req.toUsername}
-                          className="h-10 w-10 rounded-full object-cover ring-1 ring-orange-500/30 shrink-0"
-                        />
+                        <UserAvatar username={req.toUsername} size="md" />
                         <div className="min-w-0">
-                          <p className="font-mono-code text-xs font-bold text-[#ff6b00]">@{req.toUsername}</p>
-                          <p className={`text-[11px] line-clamp-1 ${isLight ? 'text-stone-500' : 'text-neutral-400'}`}>
+                          <p className="font-mono-code text-xs font-bold text-white">@{req.toUsername}</p>
+                          <p className="text-[11px] line-clamp-1 text-neutral-400">
                             Invitation sent on {new Date(req.createdAt).toLocaleDateString()}
                           </p>
                         </div>
@@ -275,11 +238,7 @@ export const FriendRequestsModal: React.FC<FriendRequestsModalProps> = ({
 
                       <button
                         onClick={() => handleCancel(req.id, req.toUsername)}
-                        className={`flex items-center gap-1 rounded-lg border px-3 py-1.5 font-sans text-xs transition-colors ${
-                          isLight
-                            ? 'border-amber-300 text-stone-600 hover:bg-amber-100 hover:text-red-600'
-                            : 'border-orange-500/30 text-neutral-300 hover:bg-[#22130c] hover:text-red-400'
-                        }`}
+                        className="flex items-center gap-1 rounded-xl border px-3 py-1.5 font-sans text-xs border-[#383a40] text-neutral-300 hover:bg-[#313338] hover:text-rose-400 transition-colors"
                       >
                         <X className="h-3.5 w-3.5" />
                         <span>Cancel Request</span>
@@ -291,19 +250,12 @@ export const FriendRequestsModal: React.FC<FriendRequestsModalProps> = ({
             )
           )}
         </div>
+
         {/* Footer */}
-        <div
-          className={`border-t px-6 py-3.5 flex justify-end font-mono-code text-xs ${
-            isLight ? 'border-amber-200/60 bg-amber-50/70' : 'border-orange-500/20 bg-[#160c07]'
-          }`}
-        >
+        <div className="border-t px-6 py-3.5 flex justify-end font-mono-code text-xs border-[#383a40] bg-[#232428]">
           <button
             onClick={onClose}
-            className={`rounded-xl px-4 py-1.5 font-sans text-xs font-medium transition-colors ${
-              isLight
-                ? 'bg-amber-200 text-stone-800 hover:bg-amber-300'
-                : 'bg-[#2a170d] text-orange-200 hover:bg-[#381e12] border border-orange-500/30'
-            }`}
+            className="rounded-xl px-4 py-1.5 font-sans text-xs font-medium bg-[#313338] text-white hover:bg-[#383a40] transition-colors"
           >
             Close
           </button>

@@ -1,101 +1,89 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
+import { TransferFile, ChatAttachment, User, FriendGroup } from '../types';
+import { UserAvatar } from './UserAvatar';
+import { FriendRequestsModal } from './FriendRequestsModal';
+import JSZip from 'jszip';
 import {
+  Users,
   UserPlus,
   Send,
   Plus,
-  Paperclip,
   Folder,
   FileImage,
   Upload,
   Download,
-  Check,
-  Clock,
+  FileArchive,
   MessageSquare,
-  Users,
   Search,
   CheckCircle2,
   AlertCircle,
-  FileArchive,
-  Image as ImageIcon,
-  FolderDown,
+  MoreVertical,
+  Edit2,
+  Trash2,
+  UserMinus,
+  Layers,
+  Check,
   X,
-  Sun,
+  Share2,
 } from 'lucide-react';
-import { TransferFile, ChatAttachment, User } from '../types';
-import JSZip from 'jszip';
-import { FriendRequestsModal } from './FriendRequestsModal';
-import { APP_VERSION } from '../version';
 
 export const FriendsMessenger: React.FC = () => {
   const {
     currentUser,
     users,
-    projects,
-    photos,
     friendRequests,
     chatMessages,
+    groups,
+    activeGroupId,
+    setActiveGroupId,
+    createGroupAction,
+    renameGroupAction,
+    deleteGroupAction,
+    addMemberToGroupAction,
+    removeMemberFromGroupAction,
     sendFriendRequestAction,
     acceptFriendRequestAction,
     declineFriendRequestAction,
     sendChatMessageAction,
     activeChatFriend,
     setActiveChatFriend,
-    setAuthModal,
-    setLightboxPhoto,
-    theme,
-    toggleTheme,
+    setIsTransferModalOpen,
     searchAccountsGlobally,
   } = useApp();
 
-
+  // Search & Add friend
   const [addFriendInput, setAddFriendInput] = useState('');
   const [requestFeedback, setRequestFeedback] = useState<{ success: boolean; message: string } | null>(null);
-  const [messageText, setMessageText] = useState('');
-  const [showAttachMenu, setShowAttachMenu] = useState(false);
-  const [showFolderModal, setShowFolderModal] = useState(false);
-  const [showFileModal, setShowFileModal] = useState(false);
-  const [isZipping, setIsZipping] = useState<string | null>(null);
-  const [isRequestsModalOpen, setIsRequestsModalOpen] = useState(false);
   const [searchResults, setSearchResults] = useState<User[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const searchContainerRef = useRef<HTMLDivElement>(null);
 
-  const isLight = theme === 'light';
+  // Group creation & editing
+  const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
+  const [newGroupName, setNewGroupName] = useState('');
+  const [selectedInitialFriends, setSelectedInitialFriends] = useState<string[]>([]);
+  const [isEditingGroupName, setIsEditingGroupName] = useState(false);
+  const [editGroupNameInput, setEditGroupNameInput] = useState('');
+  const [addMemberInput, setAddMemberInput] = useState('');
+  const [groupFeedback, setGroupFeedback] = useState<{ success: boolean; message: string } | null>(null);
 
-  if (!currentUser) {
-    return (
-      <section id="friends-section" className="mx-auto max-w-4xl py-12 px-4 text-center">
-        <div
-          className={`rounded-2xl border p-8 shadow-xl relative overflow-hidden transition-colors ${
-            isLight
-              ? 'bg-amber-50/90 border-amber-300 text-stone-900 shadow-orange-500/10'
-              : 'bg-[#140b07] border-orange-500/30 text-white shadow-2xl shadow-orange-950/60'
-          }`}
-        >
-          <div className="absolute -top-12 -right-12 w-48 h-48 bg-orange-600/15 rounded-full blur-2xl" />
-          <UserPlus className="mx-auto mb-3 h-10 w-10 text-[#ff6b00]" />
-          <h2 className="font-sans text-2xl font-bold tracking-tight">Coven Friends & Peer Vault Messenger</h2>
-          <p className={`mt-2 text-xs max-w-md mx-auto ${isLight ? 'text-stone-600' : 'text-neutral-400'}`}>
-            Connect with other creators, send requests by username, and exchange high-resolution files and folders directly inside live chat.
-          </p>
-          <button
-            onClick={() => setAuthModal('signup')}
-            className="mt-5 rounded-xl bg-[#ff6b00] px-6 py-2.5 text-xs font-bold text-black hover:bg-[#e05e00] transition-all shadow-md shadow-[#ff6b00]/25"
-          >
-            Claim Username & Join Friends
-          </button>
-        </div>
-      </section>
-    );
-  }
+  // Messaging & Attachments
+  const [messageText, setMessageText] = useState('');
+  const [showAttachMenu, setShowAttachMenu] = useState(false);
+  const [isRequestsModalOpen, setIsRequestsModalOpen] = useState(false);
+  const [isZipping, setIsZipping] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
-  const isFirstChatLoad = useRef(true);
 
-  // Derive all active chat partners (friends + anyone who has messaged current user or vice versa)
+  if (!currentUser) return null;
+
+  // Active group object
+  const activeGroup = groups.find(g => g.id === activeGroupId) || null;
+
+  // Friends list derived from accepted friends & chat history
   const messagePartners = Array.from(
     new Set(
       chatMessages
@@ -112,30 +100,17 @@ export const FriendsMessenger: React.FC = () => {
     )
   );
 
-  const friendsList = Array.from(
-    new Set([...(currentUser.friends || []), ...messagePartners])
-  );
+  const friendsList = Array.from(new Set([...(currentUser.friends || []), ...messagePartners]));
 
-  // Auto-select first conversation partner if none selected or if current selection is invalid
-  useEffect(() => {
-    if (friendsList.length > 0) {
-      if (!activeChatFriend || !friendsList.some(f => f.toLowerCase() === activeChatFriend.toLowerCase())) {
-        setActiveChatFriend(friendsList[0]);
-      }
-    }
-  }, [friendsList, activeChatFriend, setActiveChatFriend]);
-
-  // Pending incoming requests
+  // Incoming / Outgoing request counts
   const pendingIncoming = friendRequests.filter(
     r => r.toUsername.toLowerCase() === currentUser.username.toLowerCase() && r.status === 'pending'
   );
-
-  // Pending outgoing requests
   const pendingSent = friendRequests.filter(
     r => r.fromUsername.toLowerCase() === currentUser.username.toLowerCase() && r.status === 'pending'
   );
 
-  // Live debounced account search across Supabase cloud directory
+  // Live account search
   useEffect(() => {
     const query = addFriendInput.trim();
     if (!query) {
@@ -154,17 +129,17 @@ export const FriendsMessenger: React.FC = () => {
           u => u.username.toLowerCase() !== currentUser.username.toLowerCase()
         );
         setSearchResults(filtered);
-      } catch (err) {
-        console.error('Search error:', err);
+      } catch {
+        // ignore
       } finally {
         setIsSearching(false);
       }
     }, 250);
 
     return () => clearTimeout(timer);
-  }, [addFriendInput, currentUser?.username]);
+  }, [addFriendInput, currentUser.username]);
 
-  // Click outside listener to dismiss search results
+  // Handle clicking outside search dropdown
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
@@ -175,29 +150,90 @@ export const FriendsMessenger: React.FC = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Send a friend request
-  const handleSendFriendRequest = async (e?: React.FormEvent, targetUsername?: string) => {
+  // Send friend request
+  const handleSendFriendRequest = async (e?: React.FormEvent, targetHandle?: string) => {
     if (e) e.preventDefault();
-    const cleanHandle = (targetUsername || addFriendInput).replace(/^@/, '').trim();
-    if (!cleanHandle) return;
+    const handle = (targetHandle || addFriendInput).replace(/^@/, '').trim();
+    if (!handle) return;
 
     setIsSearchOpen(false);
-    const res = await sendFriendRequestAction(cleanHandle);
+    const res = await sendFriendRequestAction(handle);
     if (res.success) {
-      setRequestFeedback({
-        success: true,
-        message: `Friend request sent to @${cleanHandle}!`,
-      });
+      setRequestFeedback({ success: true, message: `Friend request sent to @${handle}!` });
       setAddFriendInput('');
       setSearchResults([]);
     } else {
-      setRequestFeedback({
-        success: false,
-        message: res.error || `User @${cleanHandle} does not exist.`,
-      });
+      setRequestFeedback({ success: false, message: res.error || `User @${handle} does not exist.` });
     }
-
     setTimeout(() => setRequestFeedback(null), 5000);
+  };
+
+  // Group Creation
+  const handleCreateGroup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newGroupName.trim()) return;
+
+    const res = await createGroupAction(newGroupName.trim(), selectedInitialFriends);
+    if (res.success) {
+      setNewGroupName('');
+      setSelectedInitialFriends([]);
+      setShowCreateGroupModal(false);
+      setGroupFeedback({ success: true, message: `Group created successfully!` });
+    } else {
+      setGroupFeedback({ success: false, message: res.error || 'Failed to create group.' });
+    }
+    setTimeout(() => setGroupFeedback(null), 4000);
+  };
+
+  // Rename Group
+  const handleRenameGroup = async () => {
+    if (!activeGroup || !editGroupNameInput.trim()) return;
+    const res = await renameGroupAction(activeGroup.id, editGroupNameInput.trim());
+    if (res.success) {
+      setIsEditingGroupName(false);
+      setGroupFeedback({ success: true, message: 'Group renamed successfully.' });
+    } else {
+      setGroupFeedback({ success: false, message: res.error || 'Failed to rename group.' });
+    }
+    setTimeout(() => setGroupFeedback(null), 4000);
+  };
+
+  // Delete Group
+  const handleDeleteGroup = async (groupId: string) => {
+    if (window.confirm('Are you sure you want to delete this group?')) {
+      const res = await deleteGroupAction(groupId);
+      if (res.success) {
+        setGroupFeedback({ success: true, message: 'Group deleted.' });
+      }
+      setTimeout(() => setGroupFeedback(null), 4000);
+    }
+  };
+
+  // Add Member to Group (with group privacy validation)
+  const handleAddMemberToGroup = async (targetUsername: string) => {
+    if (!activeGroup) return;
+    const clean = targetUsername.replace(/^@/, '').trim().toLowerCase();
+    if (!clean) return;
+
+    const res = await addMemberToGroupAction(activeGroup.id, clean);
+    if (res.success) {
+      setAddMemberInput('');
+      setGroupFeedback({ success: true, message: `@${clean} added to ${activeGroup.name}!` });
+    } else {
+      setGroupFeedback({ success: false, message: res.error || 'Failed to add user.' });
+    }
+    setTimeout(() => setGroupFeedback(null), 5000);
+  };
+
+  // Remove Member from Group
+  const handleRemoveMember = async (targetUsername: string) => {
+    if (!activeGroup) return;
+    const clean = targetUsername.replace(/^@/, '').trim().toLowerCase();
+    const res = await removeMemberFromGroupAction(activeGroup.id, clean);
+    if (res.success) {
+      setGroupFeedback({ success: true, message: `@${clean} removed from group.` });
+    }
+    setTimeout(() => setGroupFeedback(null), 4000);
   };
 
   // Chat conversation messages
@@ -210,18 +246,10 @@ export const FriendsMessenger: React.FC = () => {
           m.recipientUsername.toLowerCase() === currentUser.username.toLowerCase()))
   );
 
-  // Auto-scroll chat container strictly inside its own scrollable area (never scrolls the window or parent page)
+  // Auto-scroll chat inside container
   useEffect(() => {
     if (chatContainerRef.current) {
-      if (isFirstChatLoad.current) {
-        chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
-        isFirstChatLoad.current = false;
-      } else {
-        chatContainerRef.current.scrollTo({
-          top: chatContainerRef.current.scrollHeight,
-          behavior: 'smooth',
-        });
-      }
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
   }, [conversationMessages.length, activeChatFriend]);
 
@@ -229,43 +257,12 @@ export const FriendsMessenger: React.FC = () => {
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeChatFriend || !messageText.trim()) return;
-
     sendChatMessageAction(activeChatFriend, messageText.trim());
     setMessageText('');
   };
 
-  // Send a specific file as attachment in chat
-  const handleSendFileAttachment = (file: TransferFile) => {
-    if (!activeChatFriend) return;
-    const attachment: ChatAttachment = {
-      type: 'file',
-      title: file.name,
-      files: [file],
-      totalSize: file.size,
-    };
-    sendChatMessageAction(activeChatFriend, messageText.trim() || `Sent file: ${file.name}`, attachment);
-    setMessageText('');
-    setShowAttachMenu(false);
-    setShowFileModal(false);
-  };
-
-  // Send a specific folder as attachment in chat
-  const handleSendFolderAttachment = (folderName: string, filesList: TransferFile[]) => {
-    if (!activeChatFriend || filesList.length === 0) return;
-    const attachment: ChatAttachment = {
-      type: 'folder',
-      title: folderName,
-      files: filesList,
-      totalSize: `${filesList.length * 15} MB`,
-    };
-    sendChatMessageAction(activeChatFriend, messageText.trim() || `Sent folder: ${folderName} (${filesList.length} files)`, attachment);
-    setMessageText('');
-    setShowAttachMenu(false);
-    setShowFolderModal(false);
-  };
-
-  // Local file picker handler
-  const handleLocalFileChosen = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Send specific file attachment in chat
+  const handleSendFileAttachment = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !activeChatFriend) return;
 
@@ -278,22 +275,30 @@ export const FriendsMessenger: React.FC = () => {
         name: file.name,
         url,
         size: `${sizeMb} MB`,
-        type: file.type || 'image/jpeg',
+        type: file.type || 'application/octet-stream',
       };
-      handleSendFileAttachment(tf);
+      const attachment: ChatAttachment = {
+        type: 'file',
+        title: file.name,
+        files: [tf],
+        totalSize: `${sizeMb} MB`,
+      };
+      sendChatMessageAction(activeChatFriend, messageText.trim() || `Sent file: ${file.name}`, attachment);
+      setMessageText('');
+      setShowAttachMenu(false);
     };
     reader.readAsDataURL(file);
   };
 
-  // Local folder picker handler (supports webkitdirectory for real folder upload!)
-  const handleLocalFolderChosen = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Send folder attachment in chat
+  const handleSendFolderAttachment = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0 || !activeChatFriend) return;
 
-    const folderName = files[0].webkitRelativePath?.split('/')[0] || 'Uploaded_Folder';
+    const folderName = files[0].webkitRelativePath?.split('/')[0] || 'Shared_Folder';
     const compiled: TransferFile[] = [];
 
-    Array.from(files).slice(0, 10).forEach((file, idx) => {
+    Array.from(files).slice(0, 15).forEach((file, idx) => {
       const reader = new FileReader();
       reader.onload = () => {
         const url = reader.result as string;
@@ -303,19 +308,32 @@ export const FriendsMessenger: React.FC = () => {
           name: file.name,
           url,
           size: `${sizeMb} MB`,
-          type: file.type || 'image/jpeg',
+          type: file.type || 'application/octet-stream',
           folderPath: folderName,
         });
 
-        if (compiled.length === Math.min(files.length, 10)) {
-          handleSendFolderAttachment(folderName, compiled);
+        if (compiled.length === Math.min(files.length, 15)) {
+          const totalSizeMb = compiled.reduce((acc, f) => acc + (parseFloat(f.size) || 1), 0).toFixed(1);
+          const attachment: ChatAttachment = {
+            type: 'folder',
+            title: folderName,
+            files: compiled,
+            totalSize: `${totalSizeMb} MB`,
+          };
+          sendChatMessageAction(
+            activeChatFriend,
+            messageText.trim() || `Sent folder: ${folderName} (${compiled.length} files)`,
+            attachment
+          );
+          setMessageText('');
+          setShowAttachMenu(false);
         }
       };
       reader.readAsDataURL(file);
     });
   };
 
-  // Download folder attachment as ZIP inside chat
+  // Download folder attachment as ZIP
   const handleDownloadAttachmentZip = async (attachment: ChatAttachment) => {
     try {
       setIsZipping(attachment.title);
@@ -333,7 +351,7 @@ export const FriendsMessenger: React.FC = () => {
             folder.file(f.name, blob);
           }
         } catch {
-          folder.file(f.name.replace(/\.\w+$/, '.txt'), `File asset: ${f.name}\nSource: ${f.url}`);
+          folder.file(f.name.replace(/\.\w+$/, '.txt'), `Asset: ${f.name}\nSource: ${f.url}`);
         }
       }
 
@@ -346,8 +364,7 @@ export const FriendsMessenger: React.FC = () => {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(downloadUrl);
-    } catch (err) {
-      console.error(err);
+    } catch {
       alert('Could not generate ZIP');
     } finally {
       setIsZipping(null);
@@ -355,66 +372,53 @@ export const FriendsMessenger: React.FC = () => {
   };
 
   return (
-    <section id="friends-section" className="mx-auto max-w-7xl px-4 py-12 sm:px-6">
-      {/* Section Header */}
-      <div className={`mb-8 flex flex-col gap-3 md:flex-row md:items-end md:justify-between border-b pb-5 transition-colors ${
-        isLight ? 'border-slate-200' : 'border-neutral-800'
-      }`}>
+    <section className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
+      {/* Top Header & Add Friend Bar */}
+      <div className="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b pb-5 border-[#383a40]">
         <div>
           <div className="flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-[#ff6b00] animate-pulse" />
-            <span className="font-mono-code text-[11px] font-bold uppercase tracking-wider text-[#ff6b00]">
-              PEER MESSAGING & FILE EXCHANGE
+            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: 'var(--color-accent, #5865f2)' }} />
+            <span className="font-mono-code text-[11px] font-bold uppercase tracking-wider text-neutral-400">
+              DIRECT TRANSFERS & FRIEND GROUPS
             </span>
           </div>
-          <h2 className="mt-1 font-sans text-2xl font-bold tracking-tight sm:text-3xl">
-            Add Friends & Direct File Transfer
-          </h2>
-          <p className={`mt-1 text-xs ${isLight ? 'text-stone-600' : 'text-neutral-400'}`}>
-            Send friend requests to creators, chat in real-time, and transfer files or folders directly in conversation.
+          <h1 className="mt-1 font-sans text-2xl font-bold tracking-tight text-white">
+            Friends, Groups & Messaging
+          </h1>
+          <p className="mt-1 text-xs text-neutral-400">
+            Organize friends into custom groups, exchange folders in real-time, and manage shared packages.
           </p>
         </div>
 
-        {/* Right side: Manage Requests button directly OVER Add Friend form */}
-        <div className="flex flex-col sm:items-end gap-2.5">
+        {/* Right side: Add Friend & Requests */}
+        <div className="flex flex-wrap items-center gap-2.5">
           <button
-            type="button"
             onClick={() => setIsRequestsModalOpen(true)}
-            className={`flex items-center gap-2 rounded-lg border px-4 py-1.5 font-sans text-xs font-semibold transition-all cursor-pointer ${
-              pendingIncoming.length > 0
-                ? 'border-orange-500 bg-orange-600/15 text-[#ff6b00] hover:bg-orange-600/25 shadow-sm shadow-orange-950/40'
-                : isLight
-                ? 'border-amber-300 bg-white text-stone-700 hover:bg-amber-50 hover:border-amber-400'
-                : 'border-orange-500/30 bg-[#160d09] text-orange-200 hover:bg-[#1f120c] hover:border-orange-500/50'
-            }`}
+            className="flex items-center gap-2 rounded-xl border border-[#383a40] bg-[#2b2d31] px-4 py-2 text-xs font-semibold text-neutral-200 hover:bg-[#313338] hover:border-neutral-500 transition-all shadow-sm"
           >
-            <Users className="h-3.5 w-3.5 text-[#ff6b00]" />
-            <span>Friend Requests</span>
+            <Users className="h-4 w-4" style={{ color: 'var(--color-accent)' }} />
+            <span>Requests</span>
             {pendingIncoming.length > 0 ? (
-              <span className="flex h-5 items-center justify-center rounded-full bg-[#ff6b00] px-2 text-[10px] font-bold text-black animate-pulse">
-                {pendingIncoming.length} new
+              <span className="rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-bold text-white animate-pulse">
+                {pendingIncoming.length}
               </span>
             ) : pendingSent.length > 0 ? (
-              <span
-                className={`flex h-4 items-center justify-center rounded-full px-1.5 text-[10px] ${
-                  isLight ? 'bg-amber-100 text-stone-600' : 'bg-[#22130c] text-orange-300'
-                }`}
-              >
+              <span className="rounded-full bg-[#383a40] px-1.5 py-0.5 text-[10px] text-neutral-300">
                 {pendingSent.length} sent
               </span>
             ) : null}
           </button>
 
-          {/* Add Friend Form with Live Global Search Dropdown */}
+          {/* Add Friend Input with Global Directory Search */}
           <div ref={searchContainerRef} className="relative">
             <form onSubmit={handleSendFriendRequest} className="flex items-center gap-2">
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 font-mono-code text-xs text-[#ff6b00]">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 font-mono-code text-xs text-neutral-500">
                   @
                 </span>
                 <input
                   type="text"
-                  placeholder="username (e.g. daddy)"
+                  placeholder="Add friend by username..."
                   value={addFriendInput}
                   onFocus={() => {
                     if (addFriendInput.trim().length > 0) setIsSearchOpen(true);
@@ -423,77 +427,59 @@ export const FriendsMessenger: React.FC = () => {
                     setAddFriendInput(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''));
                     setIsSearchOpen(true);
                   }}
-                  aria-label="Add friend by username handle"
-                  className={`w-48 sm:w-56 rounded-lg border py-2 pl-7 pr-3 font-mono-code text-xs focus:border-[#ff6b00] focus:outline-none transition-colors ${
-                    isLight
-                      ? 'bg-white border-amber-300 text-stone-900'
-                      : 'bg-[#160d09] border-orange-500/30 text-white placeholder:text-neutral-500'
-                  }`}
+                  aria-label="Add friend by username"
+                  className="w-48 sm:w-56 rounded-xl border border-[#383a40] bg-[#1e1f22] py-2 pl-7 pr-3 font-mono-code text-xs text-white placeholder:text-neutral-500 focus:outline-none focus:border-[var(--color-accent)] transition-colors"
                 />
               </div>
               <button
                 type="submit"
-                className="flex items-center gap-1.5 rounded-lg bg-[#ff6b00] px-5 py-2 font-sans text-xs font-bold text-black hover:bg-[#ff7d1f] transition-all shadow-md shadow-orange-950/40 cursor-pointer"
+                className="flex items-center gap-1.5 rounded-xl px-4 py-2 font-sans text-xs font-bold text-white shadow-sm transition-all active:scale-95"
+                style={{ backgroundColor: 'var(--color-accent, #5865f2)' }}
               >
-                <UserPlus className="h-3.5 w-3.5 stroke-[2.5]" />
-                <span>Add Friend</span>
+                <UserPlus className="h-4 w-4" />
+                <span>Add</span>
               </button>
             </form>
 
-            {/* Global Search Results Dropdown */}
+            {/* Global Search Dropdown */}
             {isSearchOpen && addFriendInput.trim().length > 0 && (
-              <div
-                className={`absolute right-0 top-full mt-2 w-72 sm:w-80 rounded-xl border p-2 shadow-2xl z-50 animate-in fade-in transition-all ${
-                  isLight
-                    ? 'bg-white border-amber-300 text-stone-900 shadow-orange-500/10'
-                    : 'bg-[#1a0f0a] border-orange-500/40 text-white shadow-2xl shadow-black/80'
-                }`}
-              >
-                <div className="flex items-center justify-between px-2 py-1.5 border-b border-orange-500/20 font-mono-code text-[10px] text-orange-400 font-semibold uppercase tracking-wider">
-                  <span>Global Directory Search</span>
-                  {isSearching && <span className="animate-pulse text-[#ff6b00]">Searching...</span>}
+              <div className="absolute right-0 top-full mt-2 w-72 sm:w-80 rounded-2xl border border-[#383a40] bg-[#2b2d31] p-2 shadow-2xl z-50 animate-in fade-in">
+                <div className="flex items-center justify-between px-2 py-1.5 border-b border-[#383a40] font-mono-code text-[10px] text-neutral-400 font-semibold uppercase">
+                  <span>Directory Search</span>
+                  {isSearching && <span className="animate-pulse text-[var(--color-accent)]">Searching...</span>}
                 </div>
 
-                <div className="max-h-56 overflow-y-auto divide-y divide-orange-500/10 py-1">
+                <div className="max-h-56 overflow-y-auto divide-y divide-[#383a40] py-1">
                   {searchResults.length > 0 ? (
                     searchResults.map(u => {
                       const isFriend = (currentUser.friends || []).map(f => f.toLowerCase()).includes(u.username.toLowerCase());
-                      const isPendingSent = pendingSent.some(r => r.toUsername.toLowerCase() === u.username.toLowerCase());
-                      const isPendingIncoming = pendingIncoming.some(r => r.fromUsername.toLowerCase() === u.username.toLowerCase());
+                      const isSent = pendingSent.some(r => r.toUsername.toLowerCase() === u.username.toLowerCase());
+                      const isIncoming = pendingIncoming.some(r => r.fromUsername.toLowerCase() === u.username.toLowerCase());
 
                       return (
-                        <div
-                          key={u.id}
-                          className={`flex items-center justify-between p-2 rounded-lg transition-colors ${
-                            isLight ? 'hover:bg-amber-50' : 'hover:bg-[#25140d]'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2 min-w-0 mr-2">
-                            <img
-                              src={u.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80'}
-                              alt={u.username}
-                              className="h-7 w-7 rounded-full object-cover ring-1 ring-orange-500/40 shrink-0"
-                            />
+                        <div key={u.id} className="flex items-center justify-between p-2 rounded-xl hover:bg-[#313338] transition-colors">
+                          <div className="flex items-center gap-2.5 min-w-0 mr-2">
+                            <UserAvatar username={u.username} size="xs" />
                             <div className="min-w-0">
-                              <p className="font-mono-code text-xs font-semibold truncate text-[#ff6b00]">
+                              <p className="font-mono-code text-xs font-semibold text-white truncate">
                                 @{u.username}
                               </p>
-                              <p className={`text-[10px] truncate ${isLight ? 'text-stone-500' : 'text-neutral-400'}`}>
-                                {u.location || u.bio || 'Creator'}
+                              <p className="text-[10px] text-neutral-400 truncate">
+                                {u.bio || 'Noir Archive user'}
                               </p>
                             </div>
                           </div>
 
                           <div className="shrink-0">
                             {isFriend ? (
-                              <span className="font-mono-code text-[10px] font-semibold text-emerald-500 px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20">
+                              <span className="font-mono-code text-[10px] font-semibold text-emerald-400 px-2 py-0.5 rounded bg-emerald-500/10">
                                 ✓ Friend
                               </span>
-                            ) : isPendingSent ? (
-                              <span className="font-mono-code text-[10px] font-semibold text-orange-400 px-2 py-0.5 rounded bg-orange-500/10 border border-orange-500/20">
-                                ⏳ Pending
+                            ) : isSent ? (
+                              <span className="font-mono-code text-[10px] font-semibold text-amber-400 px-2 py-0.5 rounded bg-amber-500/10">
+                                Pending
                               </span>
-                            ) : isPendingIncoming ? (
+                            ) : isIncoming ? (
                               <button
                                 type="button"
                                 onClick={() => {
@@ -501,7 +487,7 @@ export const FriendsMessenger: React.FC = () => {
                                   if (req) acceptFriendRequestAction(req.id);
                                   setIsSearchOpen(false);
                                 }}
-                                className="rounded bg-emerald-600 px-2 py-0.5 font-sans text-[10px] font-bold text-white hover:bg-emerald-500 shadow-sm"
+                                className="rounded-lg bg-emerald-600 px-2.5 py-1 text-[10px] font-bold text-white hover:bg-emerald-500 shadow-sm"
                               >
                                 Accept
                               </button>
@@ -509,7 +495,8 @@ export const FriendsMessenger: React.FC = () => {
                               <button
                                 type="button"
                                 onClick={() => handleSendFriendRequest(undefined, u.username)}
-                                className="rounded bg-[#ff6b00] px-2.5 py-1 font-sans text-[10px] font-bold text-black hover:bg-[#ff7d1f] shadow-sm transition-transform active:scale-95"
+                                className="rounded-lg px-2.5 py-1 text-[10px] font-bold text-white shadow-sm"
+                                style={{ backgroundColor: 'var(--color-accent, #5865f2)' }}
                               >
                                 + Add
                               </button>
@@ -519,16 +506,16 @@ export const FriendsMessenger: React.FC = () => {
                       );
                     })
                   ) : isSearching ? (
-                    <div className="p-4 text-center font-mono-code text-xs opacity-60">
-                      Searching cloud database for "@{addFriendInput}"...
+                    <div className="p-4 text-center font-mono-code text-xs text-neutral-400">
+                      Searching for "@{addFriendInput}"...
                     </div>
                   ) : (
-                    <div className="p-3 text-center font-mono-code text-[11px] opacity-70">
+                    <div className="p-3 text-center font-mono-code text-[11px] text-neutral-400">
                       <p>No user found for "@{addFriendInput}"</p>
                       <button
                         type="button"
                         onClick={() => handleSendFriendRequest(undefined, addFriendInput)}
-                        className="mt-1.5 text-xs text-[#ff6b00] hover:underline block mx-auto font-semibold"
+                        className="mt-1.5 text-xs text-[var(--color-accent)] hover:underline block mx-auto font-semibold"
                       >
                         Send request to @{addFriendInput} anyway →
                       </button>
@@ -541,293 +528,387 @@ export const FriendsMessenger: React.FC = () => {
         </div>
       </div>
 
-      {/* Friend Request Feedback */}
+      {/* Feedback Alert Banners */}
       {requestFeedback && (
         <div
           className={`mb-6 flex items-center gap-2 p-3 text-xs rounded-xl border ${
             requestFeedback.success
-              ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300'
-              : 'border-red-500/40 bg-red-500/10 text-red-600 dark:text-red-300'
+              ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400'
+              : 'border-rose-500/40 bg-rose-500/10 text-rose-400'
           }`}
         >
-          {requestFeedback.success ? (
-            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
-          ) : (
-            <AlertCircle className="h-4 w-4 shrink-0 text-red-500" />
-          )}
+          {requestFeedback.success ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <AlertCircle className="h-4 w-4 shrink-0" />}
           <span>{requestFeedback.message}</span>
         </div>
       )}
 
-      {/* Pending Incoming Requests Banner */}
-      {pendingIncoming.length > 0 && (
-        <div className={`mb-6 rounded-2xl border p-4 ${
-          isLight ? 'border-amber-300 bg-amber-50/60' : 'border-orange-500/30 bg-orange-950/20'
-        }`}>
-          <div className="flex items-center gap-2 text-xs font-semibold text-[#ff6b00] uppercase tracking-wider mb-2">
-            <UserPlus className="h-4 w-4" />
-            <span>Incoming Friend Requests ({pendingIncoming.length})</span>
-          </div>
-          <div className="space-y-2">
-            {pendingIncoming.map(req => (
-              <div
-                key={req.id}
-                className={`flex items-center justify-between p-3 rounded-xl border ${
-                  isLight ? 'bg-white border-amber-200' : 'bg-[#180e0a] border-orange-500/25'
-                }`}
-              >
-                <div className="flex items-center gap-2 font-mono-code text-xs">
-                  <span className="font-bold text-[#ff6b00]">@{req.fromUsername}</span>
-                  <span className="opacity-70">wants to connect with you</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => acceptFriendRequestAction(req.id)}
-                    className="rounded-lg bg-emerald-600 px-3.5 py-1 text-xs font-semibold text-white hover:bg-emerald-500 shadow-sm"
-                  >
-                    Accept
-                  </button>
-                  <button
-                    onClick={() => declineFriendRequestAction(req.id)}
-                    className={`rounded-lg px-3 py-1 text-xs border transition-colors ${
-                      isLight ? 'border-amber-300 text-stone-600 hover:bg-amber-100' : 'border-orange-500/30 text-neutral-400 hover:bg-[#22130c]'
-                    }`}
-                  >
-                    Decline
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
+      {groupFeedback && (
+        <div
+          className={`mb-6 flex items-center gap-2 p-3 text-xs rounded-xl border ${
+            groupFeedback.success
+              ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400'
+              : 'border-rose-500/40 bg-rose-500/10 text-rose-400'
+          }`}
+        >
+          {groupFeedback.success ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <AlertCircle className="h-4 w-4 shrink-0" />}
+          <span>{groupFeedback.message}</span>
         </div>
       )}
 
-      {/* Main Friends & Messenger Layout */}
-      <div
-        className={`grid grid-cols-1 lg:grid-cols-12 rounded-2xl border min-h-[550px] shadow-xl overflow-hidden transition-colors ${
-          isLight
-            ? 'bg-white border-slate-200 text-slate-900'
-            : 'bg-[#12131a] border-neutral-800 text-white'
-        }`}
-      >
-        {/* Left: Friends List Sidebar (4 cols) */}
-        <div
-          className={`lg:col-span-4 border-b lg:border-b-0 lg:border-r flex flex-col justify-between ${
-            isLight ? 'border-slate-200 bg-slate-50/50' : 'border-neutral-800 bg-neutral-950/40'
-          }`}
-        >
-          <div>
-            <div className={`p-4 border-b flex items-center justify-between ${isLight ? 'border-slate-200' : 'border-neutral-800'}`}>
-              <div className="flex items-center gap-2">
-                <Users className="h-4 w-4 text-[#ff6b00]" />
-                <span className="font-sans text-xs font-bold uppercase tracking-wider">
-                  Friends ({friendsList.length})
+      {/* Main Discord-Inspired Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 rounded-2xl border border-[#383a40] bg-[#1e1f22] overflow-hidden shadow-2xl min-h-[620px]">
+        {/* Left Sidebar: Direct Messages & Friend Groups (4 cols) */}
+        <div className="lg:col-span-4 border-b lg:border-b-0 lg:border-r border-[#383a40] bg-[#2b2d31] flex flex-col justify-between">
+          <div className="overflow-y-auto">
+            {/* 1. FRIEND GROUPS SECTION */}
+            <div className="p-3 border-b border-[#383a40]">
+              <div className="flex items-center justify-between px-2 mb-2">
+                <span className="font-mono-code text-[11px] font-bold uppercase tracking-wider text-neutral-400 flex items-center gap-1.5">
+                  <Layers className="h-3.5 w-3.5" style={{ color: 'var(--color-accent)' }} />
+                  Friend Groups ({groups.length})
+                </span>
+                <button
+                  onClick={() => setShowCreateGroupModal(true)}
+                  className="flex items-center gap-1 rounded-lg bg-[#313338] hover:bg-[#383a40] px-2 py-1 text-[11px] font-semibold text-neutral-200 border border-[#383a40] transition-colors"
+                  title="Create a new friend group"
+                >
+                  <Plus className="h-3 w-3" />
+                  <span>New Group</span>
+                </button>
+              </div>
+
+              {groups.length === 0 ? (
+                <div className="p-3 text-center text-neutral-500 text-xs font-mono-code bg-[#232428] rounded-xl border border-[#383a40]">
+                  <p>No friend groups created.</p>
+                  <button
+                    onClick={() => setShowCreateGroupModal(true)}
+                    className="mt-1 text-xs font-semibold hover:underline"
+                    style={{ color: 'var(--color-accent, #5865f2)' }}
+                  >
+                    + Create your first group
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  {groups.map(grp => {
+                    const isSelected = activeGroupId === grp.id;
+                    const initial = (grp.name.charAt(0) || 'G').toUpperCase();
+                    return (
+                      <div
+                        key={grp.id}
+                        onClick={() => {
+                          setActiveGroupId(grp.id);
+                          setActiveChatFriend(null);
+                        }}
+                        className={`group w-full flex items-center justify-between p-2.5 rounded-xl cursor-pointer transition-all ${
+                          isSelected
+                            ? 'bg-[#313338] text-white shadow-sm border border-[var(--color-accent)]'
+                            : 'hover:bg-[#232428] text-neutral-300'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div
+                            className="h-8 w-8 rounded-xl flex items-center justify-center font-bold text-xs text-white shrink-0 shadow-sm"
+                            style={{ backgroundColor: 'var(--color-accent, #5865f2)' }}
+                          >
+                            {initial}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-sans text-xs font-bold text-white truncate">
+                              {grp.name}
+                            </p>
+                            <p className="font-mono-code text-[10px] text-neutral-400">
+                              {grp.memberUsernames.length} {grp.memberUsernames.length === 1 ? 'member' : 'members'}
+                            </p>
+                          </div>
+                        </div>
+
+                        {grp.ownerUsername.toLowerCase() === currentUser.username.toLowerCase() && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteGroup(grp.id);
+                            }}
+                            className="opacity-0 group-hover:opacity-100 p-1 text-neutral-400 hover:text-rose-400 transition-opacity"
+                            title="Delete Group"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* 2. DIRECT MESSAGES / FRIENDS LIST */}
+            <div className="p-3">
+              <div className="flex items-center justify-between px-2 mb-2">
+                <span className="font-mono-code text-[11px] font-bold uppercase tracking-wider text-neutral-400 flex items-center gap-1.5">
+                  <MessageSquare className="h-3.5 w-3.5" style={{ color: 'var(--color-accent)' }} />
+                  Direct Messages ({friendsList.length})
                 </span>
               </div>
-              <span className="font-mono-code text-[10px] opacity-60">Connected</span>
-            </div>
 
-            {/* List of Friends */}
-            {friendsList.length === 0 ? (
-              <div className="p-8 text-center opacity-60 font-mono-code text-xs">
-                <p>No friends added yet.</p>
-                <p className="mt-1 text-[11px]">
-                  Type a username above like <span className="text-[#ff6b00]">@elena_k</span> to send a request!
-                </p>
-              </div>
-            ) : (
-              <div className={`divide-y ${isLight ? 'divide-slate-200/60' : 'divide-neutral-900'}`}>
-                {friendsList.map(handle => {
-                  const friendUser = users.find(u => u.username.toLowerCase() === handle.toLowerCase());
-                  const isSelected = activeChatFriend?.toLowerCase() === handle.toLowerCase();
-
-                  // Latest message between currentUser and handle
-                  const threadMessages = chatMessages.filter(
-                    m =>
-                      (m.senderUsername.toLowerCase() === currentUser.username.toLowerCase() &&
-                        m.recipientUsername.toLowerCase() === handle.toLowerCase()) ||
-                      (m.senderUsername.toLowerCase() === handle.toLowerCase() &&
-                        m.recipientUsername.toLowerCase() === currentUser.username.toLowerCase())
-                  );
-                  const lastMsg = threadMessages[threadMessages.length - 1];
-                  const hasUnread = lastMsg && lastMsg.senderUsername.toLowerCase() === handle.toLowerCase() && !isSelected;
-                  const timeStr = lastMsg
-                    ? new Date(lastMsg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                    : '';
-                  const snippet = lastMsg
-                    ? lastMsg.attachment
-                      ? lastMsg.attachment.type === 'folder'
-                        ? `📁 ${lastMsg.attachment.title}`
-                        : `📷 ${lastMsg.attachment.title}`
-                      : lastMsg.text
-                    : (friendUser?.bio || 'Connected collaborator');
-
-                  return (
-                    <button
-                      key={handle}
-                      onClick={() => setActiveChatFriend(handle)}
-                      className={`w-full flex items-center justify-between p-3.5 text-left transition-colors ${
-                        isSelected
-                          ? isLight
-                            ? 'bg-amber-100/70 border-l-2 border-[#ff6b00]'
-                            : 'bg-[#22120a] border-l-2 border-[#ff6b00]'
-                          : isLight
-                          ? 'hover:bg-amber-50'
-                          : 'hover:bg-[#180e0a]'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3 min-w-0 flex-1 mr-2">
-                        <div className="relative shrink-0">
-                          <img
-                            src={
-                              friendUser?.avatar ||
-                              'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80'
-                            }
-                            alt={handle}
-                            className="h-9 w-9 rounded-full object-cover ring-1 ring-orange-500/40"
-                          />
-                          <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-[#ff6b00] ring-2 ring-white dark:ring-black" />
-                        </div>
+              {friendsList.length === 0 ? (
+                <div className="p-4 text-center text-neutral-500 text-xs font-mono-code bg-[#232428] rounded-xl border border-[#383a40]">
+                  <p>No friends added yet.</p>
+                  <p className="text-[11px] mt-1 text-neutral-400">Add @elena_k or search above!</p>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  {friendsList.map(handle => {
+                    const isSelected = !activeGroupId && activeChatFriend?.toLowerCase() === handle.toLowerCase();
+                    return (
+                      <button
+                        key={handle}
+                        onClick={() => {
+                          setActiveChatFriend(handle);
+                          setActiveGroupId(null);
+                        }}
+                        className={`w-full flex items-center gap-3 p-2.5 rounded-xl text-left transition-all ${
+                          isSelected
+                            ? 'bg-[#313338] text-white shadow-sm border border-[var(--color-accent)]'
+                            : 'hover:bg-[#232428] text-neutral-300'
+                        }`}
+                      >
+                        <UserAvatar username={handle} size="sm" showStatus={true} status="online" />
                         <div className="min-w-0 flex-1">
-                          <div className="flex items-center justify-between gap-1">
-                            <p className={`font-mono-code text-xs font-semibold truncate ${isLight ? 'text-stone-900' : 'text-orange-100'}`}>
-                              @{handle}
-                            </p>
-                            {timeStr && (
-                              <span className="font-mono-code text-[10px] opacity-50 shrink-0">
-                                {timeStr}
-                              </span>
-                            )}
-                          </div>
-                          <p className={`font-sans text-[11px] truncate ${
-                            hasUnread ? 'font-bold text-[#ff6b00]' : 'opacity-70'
-                          }`}>
-                            {snippet}
+                          <p className="font-mono-code text-xs font-semibold text-white truncate">
+                            @{handle}
+                          </p>
+                          <p className="text-[10px] text-neutral-400 truncate">
+                            Online · Ready for transfers
                           </p>
                         </div>
-                      </div>
-
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        {hasUnread && (
-                          <span className="h-2 w-2 rounded-full bg-[#ff6b00] animate-pulse" title="New message" />
-                        )}
-                        <span className="font-mono-code text-[11px] text-[#ff6b00] font-bold">
-                          Chat →
-                        </span>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* Quick Member Discovery Helper */}
-          <div className={`p-3 border-t font-mono-code text-[10px] ${
-            isLight ? 'border-amber-200 bg-amber-50/70' : 'border-orange-500/15 bg-[#140b07]'
-          }`}>
-            <span className="block uppercase opacity-60 mb-1 text-orange-300">Discover Platform Creators:</span>
-            <div className="flex flex-wrap gap-1">
-              {users
-                .filter(u => u.username !== currentUser.username && !friendsList.includes(u.username))
-                .map(u => (
-                  <button
-                    key={u.id}
-                    onClick={async () => {
-                      const res = await sendFriendRequestAction(u.username);
-                      if (res.success) {
-                        setRequestFeedback({
-                          success: true,
-                          message: `Friend request sent to @${u.username}!`,
-                        });
-                      } else {
-                        setRequestFeedback({
-                          success: false,
-                          message: res.error || 'Failed to send request.',
-                        });
-                      }
-                      setTimeout(() => setRequestFeedback(null), 4000);
-                    }}
-                    className={`rounded-lg px-2.5 py-0.5 border text-[10px] transition-colors ${
-                      isLight
-                        ? 'border-amber-300 bg-white hover:border-orange-500 hover:text-orange-600'
-                        : 'border-orange-500/20 bg-[#1c0f0a] hover:border-[#ff6b00] hover:text-white'
-                    }`}
-                  >
-                    + @{u.username}
-                  </button>
-                ))}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Left Sidebar Footer: Dusk Mode with v1.0 version badge */}
-          <div
-            className={`p-3 border-t flex items-center justify-between font-mono-code text-xs transition-colors ${
-              isLight ? 'border-amber-200 bg-amber-50/70' : 'border-orange-500/15 bg-[#100805]'
-            }`}
-          >
+          {/* User Status Bar at Bottom of Sidebar */}
+          <div className="p-3 border-t border-[#383a40] bg-[#232428] flex items-center justify-between">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <UserAvatar username={currentUser.username} size="sm" showStatus={true} status="online" />
+              <div className="min-w-0">
+                <p className="font-mono-code text-xs font-bold text-white truncate">
+                  @{currentUser.username}
+                </p>
+                <p className="text-[10px] text-neutral-400 truncate">
+                  Connected
+                </p>
+              </div>
+            </div>
             <button
-              type="button"
-              onClick={toggleTheme}
-              className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 transition-all cursor-pointer ${
-                isLight
-                  ? 'border-amber-300 bg-white text-stone-800 hover:bg-amber-100 shadow-sm'
-                  : 'border-orange-500/30 bg-[#1e110c] text-orange-200 hover:border-orange-400'
-              }`}
-              title="Toggle Dusk Mode"
+              onClick={() => setIsTransferModalOpen(true)}
+              className="rounded-lg p-2 bg-[#313338] hover:bg-[#383a40] text-neutral-200 border border-[#383a40] transition-colors"
+              title="Quick Send Transfer"
             >
-              <Sun className="h-3.5 w-3.5 text-amber-400" />
-              <span className="font-semibold text-xs">Dusk Mode</span>
-              <span className="font-mono-code text-[11px] font-bold text-[#ff6b00] px-1.5 py-0.5 rounded bg-orange-500/15 border border-orange-500/30">
-                v{APP_VERSION}
-              </span>
+              <Upload className="h-3.5 w-3.5" />
             </button>
-            <span className="text-[10px] opacity-60 font-mono-code">Noir Vault</span>
           </div>
         </div>
 
+        {/* Right Main Panel: Group Details View OR 1-on-1 Chat (8 cols) */}
+        <div className="lg:col-span-8 flex flex-col justify-between h-[620px] bg-[#1e1f22]">
+          {/* VIEW A: FRIEND GROUP DETAIL VIEW */}
+          {activeGroup ? (
+            <div className="flex-1 flex flex-col justify-between overflow-hidden">
+              {/* Group Header */}
+              <div className="p-4 border-b border-[#383a40] bg-[#2b2d31] flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div
+                    className="h-10 w-10 rounded-2xl flex items-center justify-center font-bold text-base text-white shadow-sm"
+                    style={{ backgroundColor: 'var(--color-accent, #5865f2)' }}
+                  >
+                    {activeGroup.name.charAt(0).toUpperCase()}
+                  </div>
 
-        {/* Right: Live Chat with Active Friend (8 cols) */}
-        <div className="lg:col-span-8 flex flex-col justify-between h-[550px]">
-          {activeChatFriend ? (
-            <>
-              {/* Chat Header */}
-              <div className={`p-3.5 border-b flex items-center justify-between ${
-                isLight ? 'border-amber-200 bg-amber-50/50' : 'border-orange-500/15 bg-[#140b07]'
-              }`}>
-                <div className="flex items-center gap-2.5">
-                  <span className="h-2 w-2 rounded-full bg-[#ff6b00]" />
-                  <span className={`font-mono-code text-xs font-semibold ${isLight ? 'text-stone-900' : 'text-orange-100'}`}>
-                    @{activeChatFriend}
-                  </span>
-                  <span className="font-mono-code text-[10px] opacity-60">
-                    • Nocturnal Peer Channel
-                  </span>
+                  <div>
+                    {isEditingGroupName ? (
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={editGroupNameInput}
+                          onChange={e => setEditGroupNameInput(e.target.value)}
+                          className="rounded-lg border border-[#383a40] bg-[#1e1f22] px-2 py-1 text-xs text-white focus:outline-none focus:border-[var(--color-accent)]"
+                        />
+                        <button
+                          onClick={handleRenameGroup}
+                          className="rounded bg-emerald-600 px-2 py-1 text-xs font-bold text-white"
+                        >
+                          Save
+                        </button>
+                        <button
+                          onClick={() => setIsEditingGroupName(false)}
+                          className="rounded bg-[#383a40] px-2 py-1 text-xs text-neutral-300"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <h2 className="text-base font-bold text-white">
+                          {activeGroup.name}
+                        </h2>
+                        {activeGroup.ownerUsername.toLowerCase() === currentUser.username.toLowerCase() && (
+                          <button
+                            onClick={() => {
+                              setEditGroupNameInput(activeGroup.name);
+                              setIsEditingGroupName(true);
+                            }}
+                            className="text-neutral-400 hover:text-white"
+                            title="Rename Group"
+                          >
+                            <Edit2 className="h-3 w-3" />
+                          </button>
+                        )}
+                      </div>
+                    )}
+                    <p className="font-mono-code text-[11px] text-neutral-400">
+                      Created by @{activeGroup.ownerUsername} • {activeGroup.memberUsernames.length} members
+                    </p>
+                  </div>
                 </div>
 
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => setShowFolderModal(true)}
-                    className={`flex items-center gap-1.5 rounded-lg border px-3 py-1 font-mono-code text-[11px] transition-colors ${
-                      isLight
-                        ? 'border-amber-300 bg-white hover:border-[#ff6b00] hover:text-[#ff6b00]'
-                        : 'border-orange-500/30 bg-[#1e110c] hover:border-orange-400 text-orange-200'
-                    }`}
+                    onClick={() => setIsTransferModalOpen(true)}
+                    className="flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-xs font-bold text-white shadow-sm transition-all"
+                    style={{ backgroundColor: 'var(--color-accent, #5865f2)' }}
                   >
-                    <Folder className="h-3 w-3 text-[#ff6b00]" />
-                    <span>Send Folder</span>
+                    <Upload className="h-3.5 w-3.5" />
+                    <span>Share to Group</span>
                   </button>
                 </div>
               </div>
 
-              {/* Chat Messages Log */}
+              {/* Group Body: Members & Sharing Hub */}
+              <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                {/* Add Friend to Group Box */}
+                <div className="rounded-2xl border border-[#383a40] bg-[#2b2d31] p-4">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-300 font-mono-code mb-2">
+                    Add Existing Friend to "{activeGroup.name}"
+                  </h3>
+                  <div className="flex gap-2">
+                    <select
+                      value={addMemberInput}
+                      onChange={e => setAddMemberInput(e.target.value)}
+                      className="flex-1 rounded-xl border border-[#383a40] bg-[#1e1f22] px-3 py-2 text-xs text-white focus:outline-none focus:border-[var(--color-accent)] font-mono-code"
+                    >
+                      <option value="">Select a friend to add...</option>
+                      {friendsList
+                        .filter(f => !activeGroup.memberUsernames.map(m => m.toLowerCase()).includes(f.toLowerCase()))
+                        .map(f => (
+                          <option key={f} value={f}>
+                            @{f}
+                          </option>
+                        ))}
+                    </select>
+                    <button
+                      onClick={() => handleAddMemberToGroup(addMemberInput)}
+                      disabled={!addMemberInput}
+                      className="rounded-xl px-4 py-2 text-xs font-bold text-white disabled:opacity-50 transition-all shadow-sm"
+                      style={{ backgroundColor: 'var(--color-accent, #5865f2)' }}
+                    >
+                      Add to Group
+                    </button>
+                  </div>
+                  <p className="mt-2 text-[11px] text-neutral-400">
+                    Subject to each friend's Group Invitation Privacy Setting.
+                  </p>
+                </div>
+
+                {/* Member Roster with Letter-Based Avatars */}
+                <div>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-300 font-mono-code mb-3">
+                    Group Members ({activeGroup.memberUsernames.length})
+                  </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {activeGroup.memberUsernames.map(member => {
+                      const isOwner = member.toLowerCase() === activeGroup.ownerUsername.toLowerCase();
+                      const isMe = member.toLowerCase() === currentUser.username.toLowerCase();
+
+                      return (
+                        <div
+                          key={member}
+                          className="flex items-center justify-between p-3 rounded-xl border border-[#383a40] bg-[#2b2d31]"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <UserAvatar username={member} size="sm" />
+                            <div className="min-w-0">
+                              <p className="font-mono-code text-xs font-bold text-white truncate">
+                                @{member}
+                              </p>
+                              <span className="text-[10px] text-neutral-400 font-mono-code">
+                                {isOwner ? '👑 Group Owner' : 'Group Member'}
+                              </span>
+                            </div>
+                          </div>
+
+                          {!isOwner && (activeGroup.ownerUsername.toLowerCase() === currentUser.username.toLowerCase() || isMe) && (
+                            <button
+                              onClick={() => handleRemoveMember(member)}
+                              className="text-neutral-400 hover:text-rose-400 p-1 transition-colors"
+                              title={isMe ? 'Leave Group' : 'Remove Member'}
+                            >
+                              <UserMinus className="h-4 w-4" />
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : activeChatFriend ? (
+            /* VIEW B: 1-ON-1 DIRECT CHAT */
+            <div className="flex-1 flex flex-col justify-between overflow-hidden">
+              {/* Chat Header */}
+              <div className="p-3.5 border-b border-[#383a40] bg-[#2b2d31] flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <UserAvatar username={activeChatFriend} size="xs" showStatus={true} status="online" />
+                  <div>
+                    <h2 className="font-mono-code text-xs font-bold text-white">
+                      @{activeChatFriend}
+                    </h2>
+                    <p className="text-[10px] text-neutral-400">
+                      Encrypted peer transfer channel
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <label className="flex items-center gap-1.5 rounded-lg border border-[#383a40] bg-[#313338] px-3 py-1 font-mono-code text-[11px] text-neutral-200 hover:border-neutral-500 cursor-pointer transition-colors">
+                    <Folder className="h-3 w-3" style={{ color: 'var(--color-accent)' }} />
+                    <span>Send Folder</span>
+                    {/* @ts-ignore */}
+                    <input
+                      type="file"
+                      // @ts-expect-error webkitdirectory
+                      webkitdirectory=""
+                      directory=""
+                      multiple
+                      onChange={handleSendFolderAttachment}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+              </div>
+
+              {/* Chat Messages */}
               <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4">
                 {conversationMessages.length === 0 ? (
-                  <div className="flex h-full flex-col items-center justify-center text-center opacity-60 font-mono-code text-xs">
-                    <MessageSquare className="h-8 w-8 mb-2 opacity-50 text-orange-400" />
-                    <p>Start a conversation with @{activeChatFriend}</p>
-                    <p className="text-[11px] mt-1">
-                      Use the "+" icon on the right of the typing bar to send files or entire folders.
+                  <div className="flex h-full flex-col items-center justify-center text-center text-neutral-500 font-mono-code text-xs">
+                    <MessageSquare className="h-8 w-8 mb-2 opacity-40 text-neutral-400" />
+                    <p>Start a transfer conversation with @{activeChatFriend}</p>
+                    <p className="text-[11px] mt-1 text-neutral-400">
+                      Use the '+' attachment menu or 'Send Folder' above to send files.
                     </p>
                   </div>
                 ) : (
@@ -839,95 +920,69 @@ export const FriendsMessenger: React.FC = () => {
                         key={msg.id}
                         className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
                       >
-                        <div className="flex items-center gap-1.5 mb-1 font-mono-code text-[10px] opacity-60">
+                        <div className="flex items-center gap-1.5 mb-1 font-mono-code text-[10px] text-neutral-500">
+                          <UserAvatar username={msg.senderUsername} size="xs" />
                           <span>@{msg.senderUsername}</span>
                           <span>•</span>
                           <span>{new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                         </div>
 
-                        {/* Text bubble */}
                         {msg.text && (
                           <div
-                            className={`max-w-md rounded-2xl px-4 py-2 text-xs font-sans leading-relaxed shadow-sm ${
+                            className={`max-w-md rounded-2xl px-4 py-2.5 text-xs font-sans leading-relaxed shadow-sm ${
                               isMe
-                                ? 'bg-[#ff6b00] text-black font-semibold shadow-md shadow-orange-950/40'
-                                : isLight
-                                ? 'bg-amber-100/80 border border-amber-200 text-stone-900'
-                                : 'bg-[#180e0a] border border-orange-500/25 text-neutral-200'
+                                ? 'text-white font-medium shadow-md'
+                                : 'bg-[#2b2d31] border border-[#383a40] text-neutral-200'
                             }`}
+                            style={{ backgroundColor: isMe ? 'var(--color-accent, #5865f2)' : undefined }}
                           >
                             {msg.text}
                           </div>
                         )}
 
-                        {/* Attachment Card if any (File or Folder) */}
+                        {/* Attachment Card */}
                         {msg.attachment && (
-                          <div
-                            className={`mt-1.5 max-w-sm rounded-xl border p-3 shadow-sm ${
-                              isLight
-                                ? 'border-amber-300 bg-amber-50'
-                                : 'border-orange-500/30 bg-[#1c0f0a]'
-                            }`}
-                          >
+                          <div className="mt-1.5 max-w-sm rounded-2xl border border-[#383a40] bg-[#2b2d31] p-3 shadow-md">
                             <div className="flex items-center justify-between mb-2">
-                              <span className="flex items-center gap-1.5 font-mono-code text-[10px] uppercase font-bold text-[#ff6b00]">
+                              <span className="flex items-center gap-1.5 font-mono-code text-[11px] uppercase font-bold text-white">
                                 {msg.attachment.type === 'folder' ? (
                                   <>
-                                    <Folder className="h-3.5 w-3.5 text-[#ff6b00]" />
+                                    <Folder className="h-4 w-4" style={{ color: 'var(--color-accent)' }} />
                                     <span>Folder: {msg.attachment.title}</span>
                                   </>
                                 ) : (
                                   <>
-                                    <FileImage className="h-3.5 w-3.5 text-[#ff6b00]" />
+                                    <FileImage className="h-4 w-4" style={{ color: 'var(--color-accent)' }} />
                                     <span>File: {msg.attachment.title}</span>
                                   </>
                                 )}
                               </span>
-                              <span className="font-mono-code text-[10px] opacity-70">
+                              <span className="font-mono-code text-[10px] text-neutral-400">
                                 {msg.attachment.totalSize}
                               </span>
                             </div>
 
-                            {/* Image Thumbnails preview */}
-                            <div className="grid grid-cols-2 gap-1.5 my-2">
-                              {msg.attachment.files.slice(0, 2).map(f => (
-                                <div
-                                  key={f.id}
-                                  onClick={() => {
-                                    const match = photos.find(p => p.url === f.url);
-                                    if (match) setLightboxPhoto(match);
-                                  }}
-                                  className="aspect-[4/3] rounded-lg overflow-hidden bg-black cursor-pointer shadow-sm"
-                                >
-                                  <img
-                                    src={f.url}
-                                    alt={f.name}
-                                    className="h-full w-full object-cover grayscale hover:scale-105 transition-transform"
-                                  />
-                                </div>
-                              ))}
-                            </div>
-
-                            {/* Download Action */}
-                            <div className="mt-2 flex items-center justify-between pt-2 border-t border-orange-500/20">
-                              <span className="font-mono-code text-[10px] opacity-70">
-                                {msg.attachment.files.length} {msg.attachment.files.length === 1 ? 'asset' : 'assets'}
+                            <div className="flex items-center justify-between pt-2 border-t border-[#383a40]">
+                              <span className="font-mono-code text-[10px] text-neutral-400">
+                                {msg.attachment.files.length} {msg.attachment.files.length === 1 ? 'file' : 'files'}
                               </span>
 
                               {msg.attachment.type === 'folder' ? (
                                 <button
                                   onClick={() => msg.attachment && handleDownloadAttachmentZip(msg.attachment)}
                                   disabled={isZipping === msg.attachment.title}
-                                  className="flex items-center gap-1 rounded-lg bg-[#ff6b00] px-3 py-1 font-mono-code text-[10px] font-bold uppercase text-black hover:bg-[#ff7d1f] transition-colors shadow-sm"
+                                  className="flex items-center gap-1.5 rounded-lg px-3 py-1 font-mono-code text-[10px] font-bold text-white shadow-sm"
+                                  style={{ backgroundColor: 'var(--color-accent, #5865f2)' }}
                                 >
                                   <FileArchive className="h-3 w-3" />
-                                  <span>{isZipping === msg.attachment.title ? 'Zipping...' : 'Download (.ZIP)'}</span>
+                                  <span>{isZipping === msg.attachment.title ? 'Packaging...' : 'Download (.ZIP)'}</span>
                                 </button>
                               ) : (
                                 <a
                                   href={msg.attachment.files[0]?.url}
-                                  download={msg.attachment.files[0]?.name || 'download.jpg'}
-                                  className="flex items-center gap-1 rounded-lg bg-[#ff6b00] px-3 py-1 font-mono-code text-[10px] font-bold uppercase text-black hover:bg-[#ff7d1f] transition-colors shadow-sm"
+                                  download={msg.attachment.files[0]?.name || 'download'}
+                                  className="flex items-center gap-1.5 rounded-lg px-3 py-1 font-mono-code text-[10px] font-bold text-white shadow-sm"
+                                  style={{ backgroundColor: 'var(--color-accent, #5865f2)' }}
                                 >
                                   <Download className="h-3 w-3" />
                                   <span>Download</span>
@@ -943,292 +998,177 @@ export const FriendsMessenger: React.FC = () => {
                 <div ref={messagesEndRef} />
               </div>
 
-              {/* Bottom Typing Bar with '+' button on the right side */}
-              <div className={`p-3 border-t relative transition-colors ${
-                isLight ? 'border-amber-200 bg-amber-50/70' : 'border-orange-500/15 bg-[#140b07]'
-              }`}>
-                {/* Popover Attachment Menu when '+' is clicked */}
+              {/* Chat Input Bar with '+' button */}
+              <div className="p-3 border-t border-[#383a40] bg-[#2b2d31] relative">
                 {showAttachMenu && (
-                  <div
-                    className={`absolute right-4 bottom-14 w-60 rounded-xl border p-2 shadow-2xl z-40 animate-in fade-in transition-colors ${
-                      isLight
-                        ? 'bg-white border-amber-200 text-stone-900 shadow-[0_10px_35px_-5px_rgba(0,0,0,0.15)]'
-                        : 'bg-[#180e0a] border-orange-500/30 text-white shadow-[0_10px_35px_-5px_rgba(255,107,0,0.2)]'
-                    }`}
-                  >
-                    <div className="font-mono-code text-[10px] uppercase opacity-60 px-2 py-1 border-b border-orange-500/20 text-orange-300">
-                      Attach & Send
-                    </div>
-
-                    <div className="py-1 space-y-0.5">
-                      {/* Select a File option */}
-                      <button
-                        onClick={() => {
-                          setShowAttachMenu(false);
-                          setShowFileModal(true);
-                        }}
-                        className={`flex w-full items-center gap-2.5 px-3 py-2 text-xs rounded-lg text-left transition-colors ${
-                          isLight ? 'hover:bg-amber-100' : 'hover:bg-[#24130c]'
-                        }`}
-                      >
-                        <FileImage className="h-4 w-4 text-[#ff6b00] shrink-0" />
-                        <div>
-                          <p className="font-semibold">Select a File</p>
-                          <p className="text-[10px] opacity-60">Pick photo or upload from disk</p>
-                        </div>
-                      </button>
-
-                      {/* Select a Folder option */}
-                      <button
-                        onClick={() => {
-                          setShowAttachMenu(false);
-                          setShowFolderModal(true);
-                        }}
-                        className={`flex w-full items-center gap-2.5 px-3 py-2 text-xs rounded-lg text-left transition-colors ${
-                          isLight ? 'hover:bg-amber-100' : 'hover:bg-[#24130c]'
-                        }`}
-                      >
-                        <Folder className="h-4 w-4 text-amber-500 shrink-0" />
-                        <div>
-                          <p className="font-semibold">Select a Folder</p>
-                          <p className="text-[10px] opacity-60">Send full album or directory</p>
-                        </div>
-                      </button>
-                    </div>
+                  <div className="absolute right-4 bottom-14 w-60 rounded-2xl border border-[#383a40] bg-[#232428] p-2 shadow-2xl z-40 animate-in fade-in space-y-1">
+                    <label className="flex items-center gap-2 p-2 rounded-xl hover:bg-[#313338] text-xs text-neutral-200 cursor-pointer transition-colors">
+                      <FileImage className="h-4 w-4" style={{ color: 'var(--color-accent)' }} />
+                      <span>Upload Single File</span>
+                      <input type="file" onChange={handleSendFileAttachment} className="hidden" />
+                    </label>
+                    <label className="flex items-center gap-2 p-2 rounded-xl hover:bg-[#313338] text-xs text-neutral-200 cursor-pointer transition-colors">
+                      <Folder className="h-4 w-4" style={{ color: 'var(--color-accent)' }} />
+                      <span>Upload Entire Folder</span>
+                      {/* @ts-ignore */}
+                      <input
+                        type="file"
+                        // @ts-expect-error webkitdirectory
+                        webkitdirectory=""
+                        directory=""
+                        multiple
+                        onChange={handleSendFolderAttachment}
+                        className="hidden"
+                      />
+                    </label>
                   </div>
                 )}
 
-                {/* Form Input Bar */}
                 <form onSubmit={handleSendMessage} className="flex items-center gap-2">
                   <input
                     type="text"
+                    placeholder={`Message @${activeChatFriend}...`}
                     value={messageText}
                     onChange={e => setMessageText(e.target.value)}
-                    aria-label={`Message @${activeChatFriend}`}
-                    placeholder="Write a message..."
-                    className={`flex-1 rounded-lg border py-2 px-4 font-sans text-xs focus:border-[#ff6b00] focus:outline-none transition-colors ${
-                      isLight
-                        ? 'bg-white border-amber-300 text-stone-900'
-                        : 'bg-[#100805] border-orange-500/30 text-white placeholder:text-neutral-500'
-                    }`}
+                    className="flex-1 rounded-xl border border-[#383a40] bg-[#1e1f22] py-2 px-3 text-xs text-white placeholder:text-neutral-500 focus:outline-none focus:border-[var(--color-accent)]"
                   />
 
-                  {/* The '+' button on the right side of the typing bar */}
                   <button
                     type="button"
                     onClick={() => setShowAttachMenu(!showAttachMenu)}
-                    title="Attach file or folder"
-                    className={`flex h-9 w-9 items-center justify-center rounded-lg border transition-all ${
-                      showAttachMenu
-                        ? 'border-[#ff6b00] bg-[#ff6b00] text-black rotate-45 shadow-sm'
-                        : isLight
-                        ? 'border-amber-300 bg-white text-stone-700 hover:border-[#ff6b00] hover:text-[#ff6b00]'
-                        : 'border-orange-500/30 bg-[#1e110c] text-orange-200 hover:border-orange-400'
-                    }`}
+                    className="rounded-xl border border-[#383a40] bg-[#1e1f22] p-2 text-neutral-300 hover:text-white hover:bg-[#313338] transition-colors"
+                    title="Attach File or Folder"
                   >
-                    <Plus className="h-5 w-5" />
+                    <Plus className="h-4 w-4" />
                   </button>
 
                   <button
                     type="submit"
-                    disabled={!messageText.trim()}
-                    className="flex h-9 items-center gap-1.5 rounded-lg bg-[#ff6b00] px-4 text-xs font-bold text-black hover:bg-[#ff7d1f] transition-colors shadow-sm disabled:opacity-40"
+                    className="rounded-xl p-2 font-bold text-white shadow-sm transition-all active:scale-95"
+                    style={{ backgroundColor: 'var(--color-accent, #5865f2)' }}
                   >
-                    <Send className="h-3 w-3 stroke-[2.5]" />
-                    <span className="hidden sm:inline">Send</span>
+                    <Send className="h-4 w-4" />
                   </button>
                 </form>
               </div>
-            </>
+            </div>
           ) : (
-            <div className="flex h-full flex-col items-center justify-center p-8 text-center opacity-60 font-mono-code text-xs">
-              <Users className="h-10 w-10 mb-2 opacity-50 text-orange-400" />
-              <p>Select a friend from the list to start messaging.</p>
+            <div className="flex h-full flex-col items-center justify-center p-8 text-center text-neutral-500 font-mono-code text-xs">
+              <Users className="h-10 w-10 mb-3 opacity-30 text-neutral-400" />
+              <h3 className="font-sans text-base font-bold text-neutral-200">
+                Select a Friend or Group
+              </h3>
+              <p className="mt-1 max-w-sm text-neutral-400">
+                Choose a direct message on the left, organize your friends into groups, or start sharing folders.
+              </p>
             </div>
           )}
         </div>
       </div>
 
-      {/* 'Select a File' Picker Modal */}
-      {showFileModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm animate-in fade-in">
-          <div
-            className={`relative w-full max-w-md rounded-2xl border p-6 shadow-2xl transition-colors ${
-              isLight
-                ? 'bg-white border-amber-200 text-stone-900'
-                : 'bg-[#140b07] border-orange-500/30 text-white'
-            }`}
-          >
+      {/* CREATE FRIEND GROUP MODAL */}
+      {showCreateGroupModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-md animate-in fade-in">
+          <div className="relative w-full max-w-md rounded-2xl border border-[#383a40] bg-[#2b2d31] p-6 shadow-2xl text-white">
             <button
-              onClick={() => setShowFileModal(false)}
-              className={`absolute right-4 top-4 flex h-7 w-7 items-center justify-center rounded-lg border transition-colors ${
-                isLight ? 'border-amber-200 text-stone-500 hover:bg-amber-100' : 'border-orange-500/30 text-orange-200 hover:bg-[#24130c]'
-              }`}
+              onClick={() => setShowCreateGroupModal(false)}
+              className="absolute right-4 top-4 text-neutral-400 hover:text-white"
             >
               <X className="h-4 w-4" />
             </button>
 
-            <div className="mb-4">
-              <span className="font-mono-code text-[10px] uppercase font-bold text-[#ff6b00]">Attach Asset</span>
-              <h3 className="font-sans text-lg font-bold">Select a File to Send</h3>
-            </div>
-
-            {/* Upload from computer option */}
-            <div className="mb-4">
-              <label
-                className={`flex items-center justify-center gap-2 border-2 border-dashed rounded-xl py-3 px-4 text-xs font-mono-code cursor-pointer transition-colors ${
-                  isLight
-                    ? 'border-amber-300 bg-amber-50 text-stone-700 hover:border-orange-500'
-                    : 'border-orange-500/30 bg-[#1b0f0a] text-orange-200 hover:border-[#ff6b00]'
-                }`}
+            <div className="flex items-center gap-2 mb-4">
+              <div
+                className="h-8 w-8 rounded-xl flex items-center justify-center text-white"
+                style={{ backgroundColor: 'var(--color-accent, #5865f2)' }}
               >
-                <Upload className="h-4 w-4 text-[#ff6b00]" />
-                <span>Upload file from computer</span>
-                <input
-                  type="file"
-                  accept="image/*,.pdf,.zip"
-                  onChange={handleLocalFileChosen}
-                  className="hidden"
-                />
-              </label>
+                <Layers className="h-4 w-4" />
+              </div>
+              <h2 className="font-sans text-lg font-bold text-white">
+                Create Friend Group
+              </h2>
             </div>
 
-            <p className="font-mono-code text-[10px] uppercase opacity-70 mb-2">
-              Or pick from photography archive:
-            </p>
+            <form onSubmit={handleCreateGroup} className="space-y-4">
+              <div>
+                <label className="block font-mono-code text-[11px] uppercase tracking-wider text-neutral-300 font-bold mb-1">
+                  Group Name <span className="text-rose-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Gaming, Family, Projects..."
+                  value={newGroupName}
+                  onChange={e => setNewGroupName(e.target.value)}
+                  className="w-full rounded-xl border border-[#383a40] bg-[#1e1f22] py-2 px-3 text-xs text-white focus:outline-none focus:border-[var(--color-accent)]"
+                />
+              </div>
 
-            <div className="max-h-56 overflow-y-auto space-y-2 pr-1">
-              {photos.map(p => (
-                <div
-                  key={p.id}
-                  onClick={() =>
-                    handleSendFileAttachment({
-                      id: p.id,
-                      name: `${p.title.replace(/\s+/g, '_')}.jpg`,
-                      url: p.url,
-                      size: p.fileSize || '14.2 MB',
-                      type: 'image/jpeg',
+              <div>
+                <label className="block font-mono-code text-[11px] uppercase tracking-wider text-neutral-300 font-bold mb-1">
+                  Add Existing Friends (Optional)
+                </label>
+                <div className="max-h-36 overflow-y-auto space-y-1 rounded-xl border border-[#383a40] bg-[#1e1f22] p-2">
+                  {friendsList.length === 0 ? (
+                    <p className="text-[11px] text-neutral-500 font-mono-code p-2">
+                      No friends yet. You can still create the group now and add members later!
+                    </p>
+                  ) : (
+                    friendsList.map(friend => {
+                      const isSelected = selectedInitialFriends.includes(friend);
+                      return (
+                        <div
+                          key={friend}
+                          onClick={() => {
+                            setSelectedInitialFriends(prev =>
+                              prev.includes(friend) ? prev.filter(f => f !== friend) : [...prev, friend]
+                            );
+                          }}
+                          className={`flex items-center justify-between p-2 rounded-lg cursor-pointer text-xs ${
+                            isSelected ? 'bg-[#313338] text-white' : 'text-neutral-300 hover:bg-[#282a2e]'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <UserAvatar username={friend} size="xs" />
+                            <span className="font-mono-code">@{friend}</span>
+                          </div>
+                          <div
+                            className={`h-4 w-4 rounded flex items-center justify-center border ${
+                              isSelected ? 'bg-[var(--color-accent)] border-[var(--color-accent)] text-white' : 'border-[#383a40]'
+                            }`}
+                          >
+                            {isSelected && <Check className="h-3 w-3 stroke-[3]" />}
+                          </div>
+                        </div>
+                      );
                     })
-                  }
-                  className={`flex items-center justify-between p-2 rounded-lg border cursor-pointer transition-colors ${
-                    isLight
-                      ? 'border-amber-200 bg-amber-50 hover:border-orange-500'
-                      : 'border-orange-500/20 bg-[#1b0f0a] hover:border-[#ff6b00]'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <img src={p.url} alt={p.title} className="h-8 w-8 rounded object-cover grayscale" />
-                    <div>
-                      <p className="text-xs font-semibold truncate max-w-[180px]">{p.title}</p>
-                      <p className="font-mono-code text-[10px] opacity-70">{p.fileSize || '14 MB'}</p>
-                    </div>
-                  </div>
-                  <span className="rounded-lg bg-[#ff6b00] px-3 py-0.5 text-[10px] font-mono-code font-bold text-black">
-                    Attach →
-                  </span>
+                  )}
                 </div>
-              ))}
-            </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateGroupModal(false)}
+                  className="rounded-xl border border-[#383a40] px-4 py-2 text-xs font-semibold text-neutral-300 hover:bg-[#313338]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!newGroupName.trim()}
+                  className="rounded-xl px-5 py-2 text-xs font-bold text-white shadow-sm disabled:opacity-50"
+                  style={{ backgroundColor: 'var(--color-accent, #5865f2)' }}
+                >
+                  Create Group
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
 
-      {/* 'Select a Folder' Picker Modal */}
-      {showFolderModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm animate-in fade-in">
-          <div
-            className={`relative w-full max-w-md rounded-2xl border p-6 shadow-2xl transition-colors ${
-              isLight
-                ? 'bg-white border-slate-200 text-slate-900'
-                : 'bg-[#12131a] border-neutral-800 text-white'
-            }`}
-          >
-            <button
-              onClick={() => setShowFolderModal(false)}
-              className={`absolute right-4 top-4 flex h-7 w-7 items-center justify-center rounded-full border transition-colors ${
-                isLight ? 'border-slate-200 text-slate-500 hover:bg-slate-100' : 'border-neutral-800 text-neutral-400 hover:bg-neutral-800'
-              }`}
-            >
-              <X className="h-4 w-4" />
-            </button>
-
-            <div className="mb-4">
-              <span className="font-mono-code text-[10px] uppercase font-bold text-cyan-600">Attach Entire Folder</span>
-              <h3 className="font-sans text-lg font-bold">Select a Folder to Send</h3>
-            </div>
-
-            {/* Upload folder from computer via webkitdirectory */}
-            <div className="mb-4">
-              <label
-                className={`flex items-center justify-center gap-2 border-2 border-dashed rounded-xl py-3 px-4 text-xs font-mono-code cursor-pointer transition-colors ${
-                  isLight
-                    ? 'border-cyan-300 bg-cyan-50/50 text-cyan-800 hover:border-cyan-500'
-                    : 'border-cyan-800/80 bg-cyan-950/20 text-cyan-300 hover:border-cyan-400'
-                }`}
-              >
-                <Upload className="h-4 w-4 text-cyan-600" />
-                <span>Upload a folder from computer</span>
-                {/* @ts-ignore */}
-                <input
-                  type="file"
-                  // @ts-expect-error webkitdirectory
-                  webkitdirectory=""
-                  directory=""
-                  multiple
-                  onChange={handleLocalFolderChosen}
-                  className="hidden"
-                />
-              </label>
-            </div>
-
-            <p className="font-mono-code text-[10px] uppercase opacity-70 mb-2">
-              Or send an album folder from your studio:
-            </p>
-
-            <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
-              {projects.map(proj => {
-                const projPhotos = photos.filter(p => p.projectId === proj.id);
-                return (
-                  <div
-                    key={proj.id}
-                    onClick={() => {
-                      const compiled = projPhotos.map(p => ({
-                        id: p.id,
-                        name: `${p.title.replace(/\s+/g, '_')}.jpg`,
-                        url: p.url,
-                        size: p.fileSize || '14.2 MB',
-                        type: 'image/jpeg',
-                        folderPath: proj.title,
-                      }));
-                      handleSendFolderAttachment(proj.title, compiled);
-                    }}
-                    className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-colors ${
-                      isLight
-                        ? 'border-slate-200 bg-slate-50 hover:border-cyan-500'
-                        : 'border-neutral-800 bg-neutral-900/60 hover:border-cyan-400'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <Folder className="h-6 w-6 text-cyan-600 shrink-0" />
-                      <div>
-                        <p className="text-xs font-semibold">{proj.title}</p>
-                        <p className="font-mono-code text-[10px] opacity-70">
-                          {projPhotos.length} photos • {proj.category}
-                        </p>
-                      </div>
-                    </div>
-                    <span className="rounded-full bg-cyan-600 px-3 py-1 text-[10px] font-mono-code text-white">
-                      Send Folder →
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Friend Requests Hub Modal */}
+      {/* FRIEND REQUESTS HUB MODAL */}
       <FriendRequestsModal
         isOpen={isRequestsModalOpen}
         onClose={() => setIsRequestsModalOpen(false)}

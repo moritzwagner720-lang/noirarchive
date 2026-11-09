@@ -3,10 +3,17 @@
 
 @layer base {
   :root {
-    --font-serif: 'Cinzel', Georgia, serif;
     --font-mono: 'Space Mono', monospace;
-    --font-sans: 'Plus Jakarta Sans', system-ui, sans-serif;
-    --font-spooky: 'Creepster', cursive, sans-serif;
+    --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
+    /* Discord-inspired Grey Design System default tokens */
+    --color-accent: #5865f2;
+    --color-accent-hover: #4752c4;
+    --color-accent-text: #ffffff;
+    --color-bg-base: #1e1f22;
+    --color-bg-surface: #2b2d31;
+    --color-bg-elevated: #313338;
+    --color-border: #383a40;
   }
 
   html {
@@ -15,58 +22,49 @@
 
   body {
     font-family: var(--font-sans);
-    letter-spacing: -0.01em;
+    letter-spacing: -0.012em;
+    background-color: var(--color-bg-base);
+    color: #f3f4f6;
+    antialiased: true;
   }
 }
 
-/* Custom Halloween ember scrollbar */
+/* Modern sleek Discord-inspired scrollbar */
 ::-webkit-scrollbar {
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #0d0705;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #381a0e;
-  border-radius: 2px;
+  background: #383a40;
+  border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #ff6b00;
-}
-
-.font-editorial {
-  font-family: var(--font-serif);
+  background: #4e5058;
 }
 
 .font-mono-code {
   font-family: var(--font-mono);
 }
 
-.font-spooky {
-  font-family: 'Creepster', cursive, sans-serif;
-  letter-spacing: 0.04em;
+/* Discord-inspired smooth panel transitions */
+.discord-panel {
+  background-color: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
 }
 
-/* Eerie Halloween glowing text */
-.text-spooky-glow {
-  text-shadow: 0 0 20px rgba(255, 107, 0, 0.7), 0 0 45px rgba(255, 107, 0, 0.4), 0 2px 4px rgba(0, 0, 0, 0.9);
+.discord-card {
+  background-color: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
 }
 
-.moon-glow {
-  box-shadow: 0 0 50px rgba(247, 214, 136, 0.45), 0 0 120px rgba(255, 107, 0, 0.25), inset -15px -15px 30px rgba(180, 110, 30, 0.4);
+/* Subtle focus ring */
+*:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
 }
-
-/* Subtle atmospheric dust & ember particles */
-.bg-halloween-mesh {
-  background: radial-gradient(circle at 50% 15%, rgba(255, 107, 0, 0.16) 0%, rgba(138, 43, 6, 0.08) 35%, transparent 70%);
-}
-
-.bg-grain {
-  background-image: radial-gradient(rgba(255, 140, 0, 0.06) 1px, transparent 0);
-  background-size: 24px 24px;
-}
-

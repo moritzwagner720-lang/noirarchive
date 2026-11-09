@@ -1,6 +1,6 @@
 {
-  "name": "NOIR ARCHIVE — Halloween Edition · Minimalist Photography Portfolios & File Delivery",
-  "description": "Nocturnal Halloween edition of Noir Archive: dark amber aesthetic, glowing harvest moon, spooky portfolio galleries, and lightning-fast client file transfers.",
+  "name": "NOIR ARCHIVE — High-Speed File & Folder Sharing Platform",
+  "description": "Noir Archive: modern, clean, encrypted file and folder sharing. Send directories, packages, and archives with real-time peer transfers and group sharing.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

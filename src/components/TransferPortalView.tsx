@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { verifyTransferAccess, calculateTotalTransferSize } from '../utils/transfer';
+import { UserAvatar } from './UserAvatar';
 import {
   Download,
   Lock,
@@ -16,6 +17,8 @@ import {
   MessageSquare,
   AlertCircle,
   Copy,
+  FileText,
+  Folder,
 } from 'lucide-react';
 import JSZip from 'jszip';
 
@@ -25,18 +28,13 @@ export const TransferPortalView: React.FC<{ transferId: string }> = ({ transferI
     setActiveTransferPortalId,
     recordDownload,
     addTransferReview,
-    setLightboxPhoto,
-    photos,
-    theme,
   } = useApp();
-
-  const isLight = theme === 'light';
 
   const [passwordInput, setPasswordInput] = useState('');
   const [unlocked, setUnlocked] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
 
-  // Client Review Form
+  // Review Form
   const [rating, setRating] = useState(5);
   const [clientAuthor, setClientAuthor] = useState('');
   const [clientComment, setClientComment] = useState('');
@@ -51,16 +49,17 @@ export const TransferPortalView: React.FC<{ transferId: string }> = ({ transferI
   if (!pkg) {
     return (
       <div className="mx-auto max-w-2xl px-4 py-20 text-center">
-        <ShieldAlert className="mx-auto mb-4 h-12 w-12 text-[#ff6b00]" />
-        <h2 className={`font-sans text-2xl font-bold tracking-tight ${isLight ? 'text-stone-900' : 'text-white'}`}>Transfer Not Found</h2>
-        <p className={`mt-2 font-mono-code text-xs ${isLight ? 'text-stone-600' : 'text-neutral-400'}`}>
+        <ShieldAlert className="mx-auto mb-4 h-12 w-12 text-rose-500" />
+        <h2 className="font-sans text-2xl font-bold tracking-tight text-white">Transfer Not Found</h2>
+        <p className="mt-2 font-mono-code text-xs text-neutral-400">
           Transfer package reference "{transferId}" does not exist or has expired.
         </p>
         <button
           onClick={() => setActiveTransferPortalId(null)}
-          className="mt-6 rounded-xl bg-[#ff6b00] px-5 py-2.5 font-mono-code text-xs font-bold text-black hover:bg-[#e05e00] shadow-md shadow-[#ff6b00]/25"
+          className="mt-6 rounded-xl px-5 py-2.5 font-mono-code text-xs font-bold text-white shadow-md hover:brightness-110"
+          style={{ backgroundColor: 'var(--color-accent, #5865f2)' }}
         >
-          Return to Archive
+          Return to Noir Archive
         </button>
       </div>
     );
@@ -96,20 +95,17 @@ export const TransferPortalView: React.FC<{ transferId: string }> = ({ transferI
         const file = pkg.files[i];
         try {
           if (file.url.startsWith('data:')) {
-            // Base64 data URL
             const base64Data = file.url.split(',')[1];
             folder.file(file.name, base64Data, { base64: true });
           } else {
-            // External URL - fetch as blob
             const res = await fetch(file.url);
             const blob = await res.blob();
             folder.file(file.name, blob);
           }
         } catch {
-          // Fallback text entry if CORS blocks remote image fetch
           folder.file(
             file.name.replace(/\.\w+$/, '.txt'),
-            `Photo Archive Item: ${file.name}\nSource: ${file.url}\nResolution: Archival`
+            `Archive Item: ${file.name}\nSource: ${file.url}`
           );
         }
       }
@@ -117,7 +113,7 @@ export const TransferPortalView: React.FC<{ transferId: string }> = ({ transferI
       // Add a manifest README
       folder.file(
         'ARCHIVE_MANIFEST.txt',
-        `NOIR ARCHIVE CLIENT DELIVERY\nPackage ID: ${pkg.id}\nSender: @${pkg.senderUsername}\nTitle: ${pkg.title}\nTotal Files: ${pkg.files.length}\nDelivery Note: ${pkg.note || 'None'}\nDownloaded at: ${new Date().toISOString()}\n`
+        `NOIR ARCHIVE DELIVERY\nPackage ID: ${pkg.id}\nSender: @${pkg.senderUsername}\nTitle: ${pkg.title}\nTotal Files: ${pkg.files.length}\nDelivery Note: ${pkg.note || 'None'}\nDownloaded at: ${new Date().toISOString()}\n`
       );
 
       const content = await zip.generateAsync({ type: 'blob' });
@@ -153,7 +149,7 @@ export const TransferPortalView: React.FC<{ transferId: string }> = ({ transferI
     if (!clientComment.trim()) return;
 
     addTransferReview(pkg.id, {
-      author: clientAuthor.trim() || 'Client / Reviewer',
+      author: clientAuthor.trim() || 'Recipient',
       rating,
       comment: clientComment.trim(),
     });
@@ -169,40 +165,34 @@ export const TransferPortalView: React.FC<{ transferId: string }> = ({ transferI
       {/* Return Button */}
       <button
         onClick={() => setActiveTransferPortalId(null)}
-        className={`mb-6 flex items-center gap-1.5 font-mono-code text-xs transition-colors ${
-          isLight ? 'text-stone-600 hover:text-stone-900' : 'text-neutral-400 hover:text-white'
-        }`}
+        className="mb-6 flex items-center gap-1.5 font-mono-code text-xs text-neutral-400 hover:text-white transition-colors"
       >
-        <ArrowLeft className="h-3.5 w-3.5 text-[#ff6b00]" />
+        <ArrowLeft className="h-3.5 w-3.5" />
         <span>Return to Noir Archive</span>
       </button>
 
       {/* Password Gate if protected */}
       {isPasswordProtected ? (
-        <div className={`mx-auto max-w-md rounded-2xl border p-6 sm:p-8 text-center shadow-2xl transition-colors ${
-          isLight ? 'bg-white border-amber-300 text-stone-900 shadow-orange-500/10' : 'bg-[#140b07] border-orange-500/30 text-white shadow-2xl shadow-orange-950/60'
-        }`}>
-          <div className={`mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl border ${
-            isLight ? 'border-amber-300 bg-amber-50 text-stone-900' : 'border-orange-500/30 bg-[#1c0f0a] text-white'
-          }`}>
-            <Lock className="h-5 w-5 text-[#ff6b00]" />
+        <div className="mx-auto max-w-md rounded-2xl border p-6 sm:p-8 text-center shadow-2xl bg-[#2b2d31] border-[#383a40] text-white">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl border border-[#383a40] bg-[#232428] text-white">
+            <Lock className="h-5 w-5" style={{ color: 'var(--color-accent, #5865f2)' }} />
           </div>
 
-          <div className="flex items-center justify-center gap-1.5 font-mono-code text-[10px] uppercase tracking-wider text-[#ff6b00] font-bold">
+          <div className="flex items-center justify-center gap-1.5 font-mono-code text-[10px] uppercase tracking-wider font-bold text-neutral-400">
             <span>PROTECTED TRANSFER PORTAL</span>
             <span>•</span>
             <span>{pkg.id}</span>
           </div>
 
-          <h2 className={`mt-1 font-sans text-2xl font-bold tracking-tight ${isLight ? 'text-stone-900' : 'text-white'}`}>
+          <h2 className="mt-1 font-sans text-2xl font-bold tracking-tight text-white">
             Access Password Required
           </h2>
-          <p className={`mt-2 text-xs ${isLight ? 'text-stone-600' : 'text-neutral-400'}`}>
-            Photographer <span className={`font-semibold ${isLight ? 'text-stone-900' : 'text-white'}`}>@{pkg.senderUsername}</span> has protected this delivery package with an access key.
+          <p className="mt-2 text-xs text-neutral-400">
+            Sender <span className="font-semibold text-white">@{pkg.senderUsername}</span> has protected this transfer package with an access password.
           </p>
 
           {passwordError && (
-            <div className="mt-4 flex items-center gap-2 rounded-xl border border-rose-500/40 bg-rose-500/10 p-2.5 text-xs text-rose-500">
+            <div className="mt-4 flex items-center gap-2 rounded-xl border border-rose-500/40 bg-rose-500/10 p-2.5 text-xs text-rose-400">
               <AlertCircle className="h-4 w-4 shrink-0" />
               <span>{passwordError}</span>
             </div>
@@ -215,55 +205,55 @@ export const TransferPortalView: React.FC<{ transferId: string }> = ({ transferI
               value={passwordInput}
               onChange={e => setPasswordInput(e.target.value)}
               aria-label="Transfer password"
-              className={`w-full rounded-xl border py-2.5 px-3 font-mono-code text-xs focus:border-[#ff6b00] focus:outline-none transition-colors ${
-                isLight ? 'bg-amber-50/50 border-amber-300 text-stone-900' : 'bg-[#180e0a] border-orange-500/30 text-white'
-              }`}
+              placeholder="Enter delivery password..."
+              className="w-full rounded-xl border py-2.5 px-3 font-mono-code text-xs bg-[#232428] border-[#383a40] text-white focus:outline-none focus:border-[var(--color-accent,#5865f2)] transition-colors"
             />
             <button
               type="submit"
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#ff6b00] py-3 text-xs font-bold uppercase tracking-wider text-black shadow-lg shadow-[#ff6b00]/25 transition-all hover:bg-[#e05e00]"
+              className="flex w-full items-center justify-center gap-2 rounded-xl py-3 text-xs font-bold uppercase tracking-wider text-white shadow-lg transition-all hover:brightness-110"
+              style={{ backgroundColor: 'var(--color-accent, #5865f2)' }}
             >
               <CheckCircle className="h-3.5 w-3.5" />
-              <span>Unlock Archive</span>
+              <span>Unlock Transfer</span>
             </button>
           </form>
 
-          <p className={`mt-4 font-mono-code text-[10px] ${isLight ? 'text-stone-500' : 'text-neutral-500'}`}>
-            This archive is password-protected by the sender. Enter your delivery password above to access files.
+          <p className="mt-4 font-mono-code text-[10px] text-neutral-500">
+            This archive is password-protected by the sender. Enter the password to access files.
           </p>
         </div>
       ) : (
         /* Unlocked / Public Transfer Package Content */
         <div className="space-y-8">
           {/* Header Banner */}
-          <div className={`rounded-2xl border p-6 sm:p-8 transition-colors ${
-            isLight ? 'border-amber-200 bg-white/95 text-stone-900 shadow-sm' : 'border-orange-500/20 bg-[#140b07] text-white'
-          }`}>
+          <div className="rounded-2xl border p-6 sm:p-8 border-[#383a40] bg-[#2b2d31] text-white">
             <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
               <div>
-                <div className="flex items-center gap-2 font-mono-code text-[10px] uppercase tracking-widest text-[#ff6b00] font-bold">
-                  <span className="h-2 w-2 rounded-full bg-[#ff6b00]" />
-                  <span>CLIENT DELIVERY PORTAL</span>
+                <div className="flex items-center gap-2 font-mono-code text-[10px] uppercase tracking-widest font-bold text-neutral-400">
+                  <span
+                    className="h-2 w-2 rounded-full"
+                    style={{ backgroundColor: 'var(--color-accent, #5865f2)' }}
+                  />
+                  <span>TRANSFER DOWNLOAD PORTAL</span>
                   <span>•</span>
                   <span>REF #{pkg.id}</span>
                 </div>
-                <h1 className={`mt-2 font-sans text-2xl font-bold tracking-tight sm:text-3xl ${isLight ? 'text-stone-900' : 'text-white'}`}>
+                <h1 className="mt-2 font-sans text-2xl font-bold tracking-tight sm:text-3xl text-white">
                   {pkg.title}
                 </h1>
-                <div className={`mt-2 flex flex-wrap items-center gap-3 font-mono-code text-xs ${
-                  isLight ? 'text-stone-600' : 'text-neutral-400'
-                }`}>
-                  <span>
-                    Curated by <strong className={`font-semibold ${isLight ? 'text-stone-900' : 'text-white'}`}>@{pkg.senderUsername}</strong>
+                <div className="mt-2 flex flex-wrap items-center gap-3 font-mono-code text-xs text-neutral-400">
+                  <span className="flex items-center gap-1.5">
+                    <UserAvatar username={pkg.senderUsername} size="xs" />
+                    <span>Sent by <strong className="text-white">@{pkg.senderUsername}</strong></span>
                   </span>
                   <span>•</span>
-                  <span>{pkg.files.length} Archival Files</span>
+                  <span>{pkg.files.length} Files</span>
                   <span>•</span>
                   <span>{totalSize} Total</span>
                   {pkg.expiresAt && (
                     <>
                       <span>•</span>
-                      <span className="flex items-center gap-1 text-amber-500 font-semibold">
+                      <span className="flex items-center gap-1 text-amber-400 font-semibold">
                         <Clock className="h-3 w-3" />
                         Expires {new Date(pkg.expiresAt).toLocaleDateString()}
                       </span>
@@ -272,9 +262,7 @@ export const TransferPortalView: React.FC<{ transferId: string }> = ({ transferI
                 </div>
 
                 {pkg.note && (
-                  <div className={`mt-4 border-l-2 border-[#ff6b00] rounded-r-xl p-3 font-sans text-xs italic ${
-                    isLight ? 'bg-amber-50 text-stone-700' : 'bg-[#1b0e08] text-neutral-300'
-                  }`}>
+                  <div className="mt-4 border-l-2 rounded-r-xl p-3 font-sans text-xs italic bg-[#232428] text-neutral-300 border-[var(--color-accent,#5865f2)]">
                     "{pkg.note}"
                   </div>
                 )}
@@ -285,17 +273,16 @@ export const TransferPortalView: React.FC<{ transferId: string }> = ({ transferI
                 <button
                   onClick={handleDownloadZip}
                   disabled={isZipping}
-                  className="flex items-center justify-center gap-2 rounded-xl bg-[#ff6b00] px-6 py-3 text-xs font-bold tracking-wider uppercase text-black shadow-lg shadow-[#ff6b00]/25 transition-all hover:bg-[#e05e00] disabled:opacity-50"
+                  className="flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-xs font-bold tracking-wider uppercase text-white shadow-lg hover:brightness-110 disabled:opacity-50 transition-all"
+                  style={{ backgroundColor: 'var(--color-accent, #5865f2)' }}
                 >
                   <FileArchive className="h-4 w-4" />
                   <span>{isZipping ? 'Archiving ZIP...' : `Download Folder (.ZIP)`}</span>
                 </button>
 
-                <div className={`flex items-center justify-between font-mono-code text-[10px] px-1 ${
-                  isLight ? 'text-stone-500' : 'text-neutral-400'
-                }`}>
+                <div className="flex items-center justify-between font-mono-code text-[10px] px-1 text-neutral-400">
                   <span>Downloaded {pkg.downloadsCount} times</span>
-                  <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Ready for proofing</span>
+                  <span className="text-emerald-400 font-semibold">Ready for download</span>
                 </div>
               </div>
             </div>
@@ -303,117 +290,78 @@ export const TransferPortalView: React.FC<{ transferId: string }> = ({ transferI
 
           {/* File Grid */}
           <div>
-            <div className={`mb-4 flex items-center justify-between border-b pb-3 font-mono-code text-xs ${
-              isLight ? 'border-amber-200 text-stone-600' : 'border-orange-500/20 text-neutral-400'
-            }`}>
+            <div className="mb-4 flex items-center justify-between border-b pb-3 font-mono-code text-xs border-[#383a40] text-neutral-400">
               <span className="uppercase tracking-wider font-semibold">
-                Delivered Folder Contents ({pkg.files.length} Assets)
+                Folder Contents ({pkg.files.length} Assets)
               </span>
-              <span>Click image to inspect or download individually</span>
+              <span>Direct download available for every file</span>
             </div>
 
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {pkg.files.map((file) => {
-                const matchedPhoto = photos.find(p => p.url === file.url);
-                return (
-                  <div
-                    key={file.id}
-                    className={`group rounded-xl border overflow-hidden transition-all duration-300 ${
-                      isLight
-                        ? 'border-amber-200 bg-white hover:border-amber-400 shadow-sm'
-                        : 'border-orange-500/20 bg-[#140b07] hover:border-orange-500/40'
-                    }`}
-                  >
-                    {/* Thumbnail */}
-                    <div
-                      onClick={() => matchedPhoto && setLightboxPhoto(matchedPhoto)}
-                      className="relative aspect-[4/3] w-full cursor-pointer overflow-hidden bg-neutral-900"
-                    >
-                      <img
-                        src={file.url}
-                        alt={file.name}
-                        className="h-full w-full object-cover grayscale transition-transform duration-500 group-hover:scale-105"
-                      />
-                      <div className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 transition-opacity group-hover:opacity-100">
-                        <span className="flex items-center gap-1.5 font-mono-code text-xs text-white">
-                          <Eye className="h-4 w-4" /> Inspect Image
-                        </span>
-                      </div>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {pkg.files.map(file => (
+                <div
+                  key={file.id}
+                  className="rounded-2xl border p-4 transition-all duration-200 border-[#383a40] bg-[#2b2d31] hover:border-[#4e5058] flex flex-col justify-between"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="h-10 w-10 rounded-xl bg-[#232428] border border-[#383a40] flex items-center justify-center shrink-0 text-neutral-400">
+                      <FileText className="h-5 w-5" />
                     </div>
-
-                    {/* File Meta */}
-                    <div className="p-3.5">
-                      <div className="flex items-start justify-between gap-2">
-                        <p className={`font-mono-code text-xs font-semibold truncate ${
-                          isLight ? 'text-stone-900' : 'text-white'
-                        }`}>
-                          {file.name}
+                    <div className="min-w-0">
+                      <p className="font-mono-code text-xs font-semibold truncate text-white">
+                        {file.name}
+                      </p>
+                      <p className="text-[10px] font-mono-code text-neutral-400 mt-0.5">
+                        {file.size}
+                      </p>
+                      {file.folderPath && (
+                        <p className="text-[10px] font-mono-code text-neutral-500 truncate mt-0.5">
+                          {file.folderPath}
                         </p>
-                        <span className={`font-mono-code text-[10px] shrink-0 ${
-                          isLight ? 'text-stone-500' : 'text-neutral-400'
-                        }`}>
-                          {file.size}
-                        </span>
-                      </div>
-
-                      <div className={`mt-3 flex items-center justify-between border-t pt-2.5 ${
-                        isLight ? 'border-amber-100' : 'border-orange-500/20'
-                      }`}>
-                        <span className={`font-mono-code text-[10px] ${
-                          isLight ? 'text-stone-500' : 'text-neutral-400'
-                        }`}>
-                          {file.folderPath || 'Master_Selection'}
-                        </span>
-
-                        <button
-                          onClick={() => handleDownloadSingle(file)}
-                          className={`flex items-center gap-1 rounded-lg border px-2.5 py-1 font-mono-code text-[11px] transition-colors ${
-                            isLight
-                              ? 'border-amber-300 bg-amber-50 text-stone-800 hover:bg-amber-100 hover:border-amber-400'
-                              : 'border-orange-500/30 bg-[#1c0f0a] text-neutral-200 hover:border-[#ff6b00] hover:text-[#ff6b00]'
-                          }`}
-                        >
-                          <Download className="h-3 w-3" />
-                          <span>Download</span>
-                        </button>
-                      </div>
+                      )}
                     </div>
                   </div>
-                );
-              })}
+
+                  <div className="mt-4 pt-3 border-t border-[#383a40] flex items-center justify-end">
+                    <button
+                      onClick={() => handleDownloadSingle(file)}
+                      className="flex items-center gap-1.5 rounded-xl border px-3 py-1.5 font-mono-code text-xs border-[#383a40] bg-[#232428] text-neutral-200 hover:border-neutral-400 transition-colors"
+                    >
+                      <Download className="h-3 w-3" />
+                      <span>Download</span>
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
 
-          {/* Client Feedback / Approval Section */}
+          {/* Feedback & Confirmation */}
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             {/* Submit Feedback */}
-            <div className={`rounded-2xl border p-6 transition-colors ${
-              isLight ? 'border-amber-200 bg-white/95 text-stone-900 shadow-sm' : 'border-orange-500/20 bg-[#140b07] text-white'
-            }`}>
+            <div className="rounded-2xl border p-6 border-[#383a40] bg-[#2b2d31] text-white">
               <div className="flex items-center gap-2">
-                <MessageSquare className="h-4 w-4 text-[#ff6b00]" />
-                <h3 className={`font-sans text-lg font-bold ${isLight ? 'text-stone-900' : 'text-white'}`}>
-                  Client Approval & Feedback
+                <MessageSquare className="h-4 w-4" style={{ color: 'var(--color-accent, #5865f2)' }} />
+                <h3 className="font-sans text-lg font-bold text-white">
+                  Receipt & Feedback
                 </h3>
               </div>
-              <p className={`mt-1 font-sans text-xs ${isLight ? 'text-stone-600' : 'text-neutral-400'}`}>
-                Leave rating and feedback for sender @{pkg.senderUsername}.
+              <p className="mt-1 font-sans text-xs text-neutral-400">
+                Leave rating or confirmation note for sender @{pkg.senderUsername}.
               </p>
 
               {reviewSubmitted && (
-                <div className="mt-3 flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-2.5 text-xs text-emerald-600 dark:text-emerald-300">
-                  <CheckCircle className="h-4 w-4 text-emerald-500" />
-                  <span>Review recorded successfully!</span>
+                <div className="mt-3 flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-2.5 text-xs text-emerald-400">
+                  <CheckCircle className="h-4 w-4 text-emerald-400" />
+                  <span>Confirmation recorded successfully!</span>
                 </div>
               )}
 
               <form onSubmit={handleReviewSubmit} className="mt-4 space-y-3">
                 {/* Rating Stars */}
                 <div>
-                  <label className={`block font-mono-code text-[10px] uppercase tracking-wider font-semibold mb-1 ${
-                    isLight ? 'text-stone-600' : 'text-neutral-400'
-                  }`}>
-                    Approval Rating:
+                  <label className="block font-mono-code text-[10px] uppercase tracking-wider font-semibold mb-1 text-neutral-400">
+                    Rating:
                   </label>
                   <div className="flex items-center gap-1">
                     {[1, 2, 3, 4, 5].map(star => (
@@ -425,93 +373,84 @@ export const TransferPortalView: React.FC<{ transferId: string }> = ({ transferI
                       >
                         <Star
                           className={`h-4 w-4 ${
-                            star <= rating ? 'fill-[#ff6b00] text-[#ff6b00]' : 'text-stone-300 dark:text-neutral-600'
+                            star <= rating ? 'fill-amber-400 text-amber-400' : 'text-neutral-600'
                           }`}
                         />
                       </button>
                     ))}
-                    <span className={`ml-2 font-mono-code text-xs ${isLight ? 'text-stone-600' : 'text-neutral-400'}`}>
+                    <span className="ml-2 font-mono-code text-xs text-neutral-400">
                       {rating} / 5 Stars
                     </span>
                   </div>
                 </div>
 
                 <div>
-                  <label className={`block font-mono-code text-[10px] uppercase tracking-wider font-semibold mb-1 ${
-                    isLight ? 'text-stone-600' : 'text-neutral-400'
-                  }`}>
-                    Your Name / Publication:
+                  <label className="block font-mono-code text-[10px] uppercase tracking-wider font-semibold mb-1 text-neutral-400">
+                    Your Name or Handle:
                   </label>
                   <input
                     type="text"
                     value={clientAuthor}
                     onChange={e => setClientAuthor(e.target.value)}
-                    aria-label="Your Name or Publication"
-                    className={`w-full rounded-xl border py-1.5 px-3 font-mono-code text-xs focus:border-[#ff6b00] focus:outline-none transition-colors ${
-                      isLight ? 'bg-amber-50/50 border-amber-300 text-stone-900' : 'bg-[#180e0a] border-orange-500/30 text-white'
-                    }`}
+                    aria-label="Your Name or Handle"
+                    placeholder="Anonymous Recipient"
+                    className="w-full rounded-xl border py-1.5 px-3 font-mono-code text-xs bg-[#232428] border-[#383a40] text-white focus:outline-none focus:border-[var(--color-accent,#5865f2)] transition-colors"
                   />
                 </div>
 
                 <div>
-                  <label className={`block font-mono-code text-[10px] uppercase tracking-wider font-semibold mb-1 ${
-                    isLight ? 'text-stone-600' : 'text-neutral-400'
-                  }`}>
-                    Selection Notes / Approval:
+                  <label className="block font-mono-code text-[10px] uppercase tracking-wider font-semibold mb-1 text-neutral-400">
+                    Delivery Notes / Confirmation:
                   </label>
                   <textarea
                     rows={2}
                     required
                     value={clientComment}
                     onChange={e => setClientComment(e.target.value)}
-                    aria-label="Selection Notes or Approval"
-                    className={`w-full rounded-xl border py-1.5 px-3 font-mono-code text-xs focus:border-[#ff6b00] focus:outline-none transition-colors ${
-                      isLight ? 'bg-amber-50/50 border-amber-300 text-stone-900' : 'bg-[#180e0a] border-orange-500/30 text-white'
-                    }`}
+                    aria-label="Delivery Notes or Confirmation"
+                    placeholder="Received all files intact..."
+                    className="w-full rounded-xl border py-1.5 px-3 font-mono-code text-xs bg-[#232428] border-[#383a40] text-white focus:outline-none focus:border-[var(--color-accent,#5865f2)] transition-colors"
                   />
                 </div>
 
                 <button
                   type="submit"
-                  className="flex items-center gap-2 rounded-xl bg-[#ff6b00] px-4 py-2 text-xs font-bold uppercase text-black hover:bg-[#e05e00] shadow-md shadow-[#ff6b00]/25 transition-all"
+                  className="flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold uppercase text-white hover:brightness-110 shadow-md transition-all"
+                  style={{ backgroundColor: 'var(--color-accent, #5865f2)' }}
                 >
                   <Check className="h-3.5 w-3.5" />
-                  <span>Submit Approval</span>
+                  <span>Submit Confirmation</span>
                 </button>
               </form>
             </div>
 
             {/* Existing Feedback History */}
-            <div className={`rounded-2xl border p-6 transition-colors ${
-              isLight ? 'border-amber-200 bg-white/95 text-stone-900 shadow-sm' : 'border-orange-500/20 bg-[#140b07] text-white'
-            }`}>
-              <h3 className={`font-sans text-lg font-bold mb-2 ${isLight ? 'text-stone-900' : 'text-white'}`}>
-                Approval Log ({pkg.reviews?.length || 0})
+            <div className="rounded-2xl border p-6 border-[#383a40] bg-[#2b2d31] text-white">
+              <h3 className="font-sans text-lg font-bold mb-2 text-white">
+                Delivery Log ({pkg.reviews?.length || 0})
               </h3>
               {(!pkg.reviews || pkg.reviews.length === 0) ? (
-                <p className={`font-mono-code text-xs ${isLight ? 'text-stone-500' : 'text-neutral-400'}`}>
-                  No client reviews submitted yet. Use the form on the left to submit an approval stamp.
+                <p className="font-mono-code text-xs text-neutral-400">
+                  No confirmation notes submitted yet.
                 </p>
               ) : (
                 <div className="space-y-3 max-h-56 overflow-y-auto pr-1">
                   {pkg.reviews.map(rev => (
-                    <div key={rev.id} className={`rounded-xl border p-3 ${
-                      isLight ? 'border-amber-200 bg-amber-50/60' : 'border-orange-500/20 bg-[#1a0e0a]'
-                    }`}>
+                    <div key={rev.id} className="rounded-xl border p-3 border-[#383a40] bg-[#232428]">
                       <div className="flex items-center justify-between">
-                        <span className={`font-sans text-xs font-bold ${isLight ? 'text-stone-900' : 'text-white'}`}>
+                        <span className="font-sans text-xs font-bold text-white">
                           {rev.author}
                         </span>
                         <div className="flex items-center gap-0.5">
                           {Array.from({ length: rev.rating }).map((_, i) => (
-                            <Star key={i} className="h-3 w-3 fill-[#ff6b00] text-[#ff6b00]" />
+                            <Star key={i} className="h-3 w-3 fill-amber-400 text-amber-400" />
                           ))}
                         </div>
                       </div>
-                      <p className={`mt-1 font-sans text-xs italic ${isLight ? 'text-stone-700' : 'text-neutral-300'}`}>
+                      <p className="mt-1 font-sans text-xs italic text-neutral-300">
                         "{rev.comment}"
                       </p>
-                      <span className={`mt-2 block font-mono-code text-[9px] ${isLight ? 'text-stone-500' : 'text-neutral-500'}`}>
+                      <span className="mt-2 block font-mono-code text-[9px] text-neutral-500">
                         {new Date(rev.createdAt).toLocaleDateString()}
                       </span>
                     </div>

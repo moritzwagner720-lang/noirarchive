@@ -7,9 +7,11 @@ export interface CreateTransferInput {
   senderName?: string;
   title: string;
   note?: string;
-  recipientType: 'username' | 'direct-link' | 'email';
+  recipientType: 'username' | 'direct-link' | 'email' | 'group';
   recipientUsername?: string;
   recipientEmail?: string;
+  recipientGroupId?: string;
+  recipientGroupName?: string;
   password?: string;
   expiryDays?: number | null; // e.g. 7, 30, null for never
   files: TransferFile[];
@@ -49,6 +51,8 @@ export function createTransferPackage(input: CreateTransferInput): FileTransferP
     recipientType: input.recipientType,
     recipientUsername: input.recipientUsername?.trim().toLowerCase() || undefined,
     recipientEmail: input.recipientEmail?.trim() || undefined,
+    recipientGroupId: input.recipientGroupId,
+    recipientGroupName: input.recipientGroupName,
     hasPassword: Boolean(input.password && input.password.trim()),
     passwordHash: input.password && input.password.trim() ? hashPassword(input.password.trim()) : undefined,
     expiresAt,

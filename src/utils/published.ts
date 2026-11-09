@@ -25,21 +25,21 @@ export function createPublishedPackage(input: CreatePublishedInput): PublishedPa
   const id = `PUB-${Math.floor(1000 + Math.random() * 9000)}`;
   const totalSize = calculateTotalTransferSize(input.files);
 
-  // If no cover photo provided, pick first image
+  // If no cover photo provided, pick first image or empty
   const coverUrl =
     input.coverUrl ||
     input.files.find(f => f.type.startsWith('image/'))?.url ||
     input.files[0]?.url ||
-    'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=1200&q=85';
+    '';
 
   return {
     id,
     title: cleanTitle,
-    description: input.description.trim() || 'Curated high-resolution file bundle open for public download.',
+    description: input.description.trim() || 'Curated high-speed file bundle open for public download.',
     authorUsername: input.authorUsername.trim() || 'creator',
     authorAvatar: input.authorAvatar,
     category: input.category || 'bundles',
-    tags: input.tags && input.tags.length > 0 ? input.tags : ['photography', 'raw', 'free-download'],
+    tags: input.tags && input.tags.length > 0 ? input.tags : ['files', 'archive', 'direct-download'],
     coverUrl,
     files: input.files,
     totalSize,
