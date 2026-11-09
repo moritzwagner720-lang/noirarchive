@@ -1,6 +1,7 @@
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
+import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 import {
@@ -83,6 +84,18 @@ export interface FriendGroup {
   updatedAt?: string;
 }
 
+export interface AuthSession {
+  id: string;
+  token: string;
+  userId: string;
+  username: string;
+  createdAt: string;
+  expiresAt: string;
+  lastActive: string;
+  client?: string;
+  ip?: string;
+}
+
 interface StoreData {
   users: User[];
   friendRequests: any[];
@@ -91,6 +104,7 @@ interface StoreData {
   publishedPackages: any[];
   groups: FriendGroup[];
   reports?: any[];
+  sessions: AuthSession[];
 }
 
 const DEFAULT_USERS: User[] = [
@@ -213,6 +227,7 @@ function loadStore(): StoreData {
       data.users = Array.from(userMap.values());
       data.groups = Array.isArray(data.groups) ? data.groups : [];
       data.reports = Array.isArray(data.reports) ? data.reports : [];
+      data.sessions = Array.isArray(data.sessions) ? data.sessions : [];
       return data;
     }
   } catch (err) {
@@ -227,6 +242,7 @@ function loadStore(): StoreData {
     transfers: [],
     publishedPackages: [],
     groups: [],
+    sessions: [],
   };
   saveStore(initialStore);
   return initialStore;
@@ -246,6 +262,69 @@ let store = loadStore();
 function sanitizeUser(user: User | UserDTO) {
   const { passwordHash, ...safe } = user;
   return safe;
+}
+
+function parseCookies(cookieHeader?: string): Record<string, string> {
+  if (!cookieHeader) return {};
+  const list: Record<string, string> = {};
+  cookieHeader.split(';').forEach(cookie => {
+    const parts = cookie.split('=');
+    const name = parts[0]?.trim();
+    if (name) {
+      list[name] = decodeURIComponent(parts.slice(1).join('=').trim());
+    }
+  });
+  return list;
+}
+
+function parseClientUserAgent(ua?: string): string {
+  if (!ua) return 'Web Browser';
+  if (/electron/i.test(ua)) return 'Noir Archive Desktop v1.0';
+  if (/chrome/i.test(ua) && !/edg/i.test(ua)) {
+    if (/mac/i.test(ua)) return 'Chrome (macOS)';
+    if (/win/i.test(ua)) return 'Chrome (Windows)';
+    if (/android/i.test(ua)) return 'Chrome (Android)';
+    return 'Chrome';
+  }
+  if (/firefox/i.test(ua)) return 'Firefox';
+  if (/safari/i.test(ua) && !/chrome/i.test(ua)) return 'Safari';
+  if (/edg/i.test(ua)) return 'Edge';
+  return 'Web Client';
+}
+
+function getSessionToken(req: express.Request): string | null {
+  // 1. Primary: HttpOnly session cookie
+  const cookies = parseCookies(req.headers.cookie);
+  if (cookies['noir_auth_session']) {
+    return cookies['noir_auth_session'];
+  }
+  // 2. Secondary: Authorization: Bearer <token> (for desktop clients & API consumers)
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    return authHeader.substring(7).trim();
+  }
+  return null;
+}
+
+function setSessionCookie(res: express.Response, req: express.Request, token: string) {
+  const isHttps = req.secure || req.headers['x-forwarded-proto'] === 'https';
+  res.cookie('noir_auth_session', token, {
+    httpOnly: true,
+    secure: isHttps,
+    sameSite: isHttps ? 'none' : 'lax',
+    path: '/',
+    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days persistent session (like Gmail)
+  });
+}
+
+function clearSessionCookie(res: express.Response, req: express.Request) {
+  const isHttps = req.secure || req.headers['x-forwarded-proto'] === 'https';
+  res.clearCookie('noir_auth_session', {
+    httpOnly: true,
+    secure: isHttps,
+    sameSite: isHttps ? 'none' : 'lax',
+    path: '/',
+  });
 }
 
 async function startServer() {
@@ -276,9 +355,15 @@ async function startServer() {
 
   // CORS Middleware for universal cross-origin, mobile, and electron desktop support
   app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', '*');
+    const origin = req.headers.origin;
+    if (origin) {
+      res.header('Access-Control-Allow-Origin', origin);
+      res.header('Access-Control-Allow-Credentials', 'true');
+    } else {
+      res.header('Access-Control-Allow-Origin', '*');
+    }
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cookie');
     if (req.method === 'OPTIONS') {
       return res.sendStatus(200);
     }
@@ -566,11 +651,47 @@ async function startServer() {
       }
     }
 
+    // Generate secure persistent session
+    const sessionToken = crypto.randomBytes(32).toString('hex');
+    const newSession: AuthSession = {
+      id: `sess_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`,
+      token: sessionToken,
+      userId: newUser.id,
+      username: newUser.username,
+      createdAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      lastActive: new Date().toISOString(),
+      client: parseClientUserAgent(req.headers['user-agent']),
+      ip: (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket.remoteAddress || '127.0.0.1',
+    };
+
+    store.sessions = store.sessions || [];
+    store.sessions.push(newSession);
+
+    newUser.activeSessions = [
+      {
+        id: newSession.id,
+        client: newSession.client || 'Web Browser',
+        ip: newSession.ip || '127.0.0.1',
+        lastActive: 'Just now',
+        current: true,
+      },
+    ];
+
     store.users.push(newUser);
     saveStore(store);
 
+    setSessionCookie(res, req, sessionToken);
     broadcast('user_registered', sanitizeUser(newUser));
-    res.json({ success: true, user: sanitizeUser(newUser) });
+    res.json({
+      success: true,
+      user: sanitizeUser(newUser),
+      session: {
+        id: newSession.id,
+        expiresAt: newSession.expiresAt,
+      },
+      sessionToken,
+    });
   });
 
   // User Sign In
@@ -594,7 +715,183 @@ async function startServer() {
       return res.status(401).json({ error: 'Invalid username or password' });
     }
 
-    res.json({ success: true, user: sanitizeUser(user) });
+    // Generate secure persistent session
+    const sessionToken = crypto.randomBytes(32).toString('hex');
+    const newSession: AuthSession = {
+      id: `sess_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`,
+      token: sessionToken,
+      userId: user.id,
+      username: user.username,
+      createdAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      lastActive: new Date().toISOString(),
+      client: parseClientUserAgent(req.headers['user-agent']),
+      ip: (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket.remoteAddress || '127.0.0.1',
+    };
+
+    store.sessions = store.sessions || [];
+    store.sessions.push(newSession);
+
+    const userObj = store.users.find(u => u.username.toLowerCase() === cleanUsername);
+    if (userObj) {
+      userObj.activeSessions = [
+        {
+          id: newSession.id,
+          client: newSession.client || 'Web Browser',
+          ip: newSession.ip || '127.0.0.1',
+          lastActive: 'Just now',
+          current: true,
+        },
+        ...(userObj.activeSessions || []).filter(s => s.id !== newSession.id).slice(0, 4),
+      ];
+    }
+    saveStore(store);
+
+    setSessionCookie(res, req, sessionToken);
+    res.json({
+      success: true,
+      user: sanitizeUser(user),
+      session: {
+        id: newSession.id,
+        expiresAt: newSession.expiresAt,
+      },
+      sessionToken,
+    });
+  });
+
+  // Verify and restore persistent session (like Gmail)
+  app.get('/api/auth/session', async (req, res) => {
+    const token = getSessionToken(req);
+    if (!token) {
+      return res.json({ authenticated: false, message: 'No session token found' });
+    }
+
+    store.sessions = store.sessions || [];
+    const session = store.sessions.find(s => s.token === token);
+    if (!session) {
+      clearSessionCookie(res, req);
+      return res.json({ authenticated: false, message: 'Invalid or revoked session' });
+    }
+
+    if (new Date(session.expiresAt) <= new Date()) {
+      store.sessions = store.sessions.filter(s => s.token !== token);
+      clearSessionCookie(res, req);
+      saveStore(store);
+      return res.json({ authenticated: false, message: 'Session expired' });
+    }
+
+    // Refresh last active timestamp
+    session.lastActive = new Date().toISOString();
+
+    let user: User | UserDTO | null = null;
+    if (isSupabaseConfigured()) {
+      user = await getSupabaseUserByUsername(session.username);
+    }
+    if (!user) {
+      user = store.users.find(u => u.username.toLowerCase() === session.username.toLowerCase()) || null;
+    }
+
+    if (!user) {
+      store.sessions = store.sessions.filter(s => s.token !== token);
+      clearSessionCookie(res, req);
+      saveStore(store);
+      return res.json({ authenticated: false, message: 'User account not found' });
+    }
+
+    saveStore(store);
+
+    // Refresh cookie expiry so active users stay logged in smoothly
+    setSessionCookie(res, req, token);
+
+    res.json({
+      authenticated: true,
+      user: sanitizeUser(user),
+      session: {
+        id: session.id,
+        expiresAt: session.expiresAt,
+        client: session.client,
+        lastActive: session.lastActive,
+      },
+    });
+  });
+
+  // Sign Out current session
+  app.post('/api/auth/signout', (req, res) => {
+    const token = getSessionToken(req);
+    if (token) {
+      store.sessions = (store.sessions || []).filter(s => s.token !== token);
+      saveStore(store);
+    }
+    clearSessionCookie(res, req);
+    res.json({ success: true, message: 'Logged out successfully' });
+  });
+
+  // Sign Out of all sessions (Option to log out of all sessions)
+  app.post('/api/auth/signout-all', (req, res) => {
+    const token = getSessionToken(req);
+    if (token) {
+      const session = (store.sessions || []).find(s => s.token === token);
+      if (session) {
+        store.sessions = (store.sessions || []).filter(s => s.username.toLowerCase() !== session.username.toLowerCase());
+        const userObj = store.users.find(u => u.username.toLowerCase() === session.username.toLowerCase());
+        if (userObj) {
+          userObj.activeSessions = [];
+        }
+        saveStore(store);
+      }
+    }
+    clearSessionCookie(res, req);
+    res.json({ success: true, message: 'All sessions revoked successfully' });
+  });
+
+  // Get active sessions for current user
+  app.get('/api/auth/sessions', (req, res) => {
+    const token = getSessionToken(req);
+    if (!token) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    const currentSession = (store.sessions || []).find(s => s.token === token);
+    if (!currentSession) {
+      return res.status(401).json({ error: 'Invalid session' });
+    }
+
+    const userSessions = (store.sessions || [])
+      .filter(s => s.username.toLowerCase() === currentSession.username.toLowerCase())
+      .map(s => ({
+        id: s.id,
+        client: s.client || 'Web Browser',
+        ip: s.ip || '127.0.0.1',
+        lastActive: s.token === token ? 'Just now (This Browser)' : s.lastActive,
+        createdAt: s.createdAt,
+        current: s.token === token,
+      }));
+
+    res.json({ success: true, sessions: userSessions });
+  });
+
+  // Revoke specific session by ID
+  app.delete('/api/auth/sessions/:sessionId', (req, res) => {
+    const token = getSessionToken(req);
+    if (!token) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    const currentSession = (store.sessions || []).find(s => s.token === token);
+    if (!currentSession) {
+      return res.status(401).json({ error: 'Invalid session' });
+    }
+
+    const { sessionId } = req.params;
+    const target = (store.sessions || []).find(s => s.id === sessionId);
+    if (target && target.username.toLowerCase() === currentSession.username.toLowerCase()) {
+      store.sessions = store.sessions.filter(s => s.id !== sessionId);
+      if (target.token === token) {
+        clearSessionCookie(res, req);
+      }
+      saveStore(store);
+      return res.json({ success: true, message: 'Session revoked' });
+    }
+
+    res.status(404).json({ error: 'Session not found or unauthorized' });
   });
 
   // Client Sync Local User

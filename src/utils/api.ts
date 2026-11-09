@@ -45,13 +45,25 @@ export function getApiBaseUrl(): string {
     return String((window as any).NOIR_API_URL).trim().replace(/\/$/, '');
   }
 
-  // 4. If current host is already the production backend, relative is fine
-  if (typeof window !== 'undefined' && window.location.origin === PRODUCTION_BACKEND_URL) {
-    return '';
+  // 4. If current host is the production backend or current local/dev container, relative is best
+  if (typeof window !== 'undefined') {
+    if (window.location.origin === PRODUCTION_BACKEND_URL) {
+      return '';
+    }
+    // In local development or AI Studio preview container, route to same-origin dev server
+    // to preserve HttpOnly authentication cookies with zero cross-origin cookie blocking
+    if (
+      window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1' ||
+      window.location.hostname.includes('ais-dev-') ||
+      window.location.hostname.includes('ais-pre-')
+    ) {
+      return '';
+    }
   }
 
-  // 5. Default for ALL clients (Browser, Mobile Web, Windows Electron):
-  // Both browser and Windows clients connect to the exact same production backend: https://noirarchive.onrender.com
+  // 5. Default for ALL standalone clients (Node.js tests, Windows Electron):
+  // Connects directly to production backend: https://noirarchive.onrender.com
   return PRODUCTION_BACKEND_URL;
 }
 
@@ -59,6 +71,20 @@ export function apiUrl(endpoint: string): string {
   const base = getApiBaseUrl();
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
   return `${base}${cleanEndpoint}`;
+}
+
+export async function apiFetch(endpoint: string, options: RequestInit = {}): Promise<Response> {
+  const url = apiUrl(endpoint);
+  const headers = new Headers(options.headers || {});
+  if (!headers.has('Content-Type') && !(options.body instanceof FormData)) {
+    headers.set('Content-Type', 'application/json');
+  }
+
+  return fetch(url, {
+    ...options,
+    credentials: 'include',
+    headers,
+  });
 }
 
 export interface BackendHealthResponse {

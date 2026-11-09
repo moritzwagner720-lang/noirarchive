@@ -12,6 +12,7 @@ import {
   GroupPrivacySetting,
   ThemeId,
   UserSettings,
+  ActiveSession,
 } from '../types';
 import {
   INITIAL_USERS,
@@ -28,7 +29,7 @@ import { createFriendRequest, createChatMessage } from '../utils/friends';
 import { createPublishedPackage, togglePackageLike, CreatePublishedInput } from '../utils/published';
 import { createFriendGroup, canAddToGroup } from '../utils/groups';
 import { applyThemeToDocument, DEFAULT_THEME_ID } from '../utils/themes';
-import { apiUrl } from '../utils/api';
+import { apiUrl, apiFetch } from '../utils/api';
 
 interface AppContextType {
   // Data
@@ -88,9 +89,14 @@ interface AppContextType {
     location?: string;
   }) => Promise<{ success: boolean; error?: string }>;
   signIn: (username: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  signOut: () => void;
+  signOut: () => Promise<void>;
   switchUserQuick: (username: string) => void;
   searchAccountsGlobally: (query: string) => Promise<User[]>;
+  isRestoringSession: boolean;
+  activeSessions: ActiveSession[];
+  refreshSessionsAction: () => Promise<void>;
+  revokeSessionAction: (sessionId: string) => Promise<{ success: boolean; error?: string }>;
+  signOutAllSessionsAction: () => Promise<{ success: boolean; error?: string }>;
 
   // Transfers
   isTransferModalOpen: boolean;
@@ -202,6 +208,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   });
 
+  const [isRestoringSession, setIsRestoringSession] = useState<boolean>(true);
+  const [activeSessions, setActiveSessions] = useState<ActiveSession[]>([]);
+
   const [groups, setGroups] = useState<FriendGroup[]>(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY_GROUPS);
@@ -309,7 +318,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       localStorage.setItem(STORAGE_KEY_CHAT_MESSAGES, JSON.stringify(chatMessages));
       localStorage.setItem(STORAGE_KEY_PUBLISHED, JSON.stringify(publishedPackages));
       if (currentUser) {
-        localStorage.setItem(STORAGE_KEY_CURRENT_USER, JSON.stringify(currentUser));
+        const { passwordHash, ...safeUser } = currentUser as any;
+        localStorage.setItem(STORAGE_KEY_CURRENT_USER, JSON.stringify(safeUser));
       } else {
         localStorage.removeItem(STORAGE_KEY_CURRENT_USER);
       }
@@ -824,9 +834,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const cleanUsername = data.username.trim().toLowerCase();
 
     try {
-      const res = await fetch(apiUrl('/api/auth/signup'), {
+      const res = await apiFetch('/api/auth/signup', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           username: cleanUsername,
           password: data.password,
@@ -848,7 +857,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const authenticatedUser: User = {
         ...resData.user,
         avatar: '',
-        passwordHash: hashPassword(data.password),
+        passwordHash: '', // Never store passwords or hashes in client session state
         friends: resData.user.friends || [],
         selectedTheme: 'graphite',
         groupPrivacy: 'friends',
@@ -859,6 +868,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setAuthModal(null);
       setSelectedTheme('graphite');
       applyThemeToDocument('graphite');
+
+      // Refresh active sessions list
+      refreshSessionsAction();
 
       return { success: true };
     } catch (err: any) {
@@ -873,9 +885,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const normalized = username.trim().toLowerCase();
 
     try {
-      const res = await fetch(apiUrl('/api/auth/signin'), {
+      const res = await apiFetch('/api/auth/signin', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: normalized, password: pass }),
       });
 
@@ -885,7 +896,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           const authenticatedUser: User = {
             ...data.user,
             avatar: '',
-            passwordHash: hashPassword(pass),
+            passwordHash: '', // Never store passwords or hashes in client session state
             friends: data.user.friends || [],
             selectedTheme: data.user.selectedTheme || 'graphite',
             groupPrivacy: data.user.groupPrivacy || 'friends',
@@ -909,6 +920,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             setGroupPrivacy(authenticatedUser.groupPrivacy);
           }
 
+          // Refresh active sessions list
+          refreshSessionsAction();
+
           return { success: true };
         }
       }
@@ -923,13 +937,139 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   };
 
-  const signOut = () => {
-    setCurrentUser(null);
+  const signOut = async () => {
     try {
-      localStorage.removeItem(STORAGE_KEY_CURRENT_USER);
-      sessionStorage.clear();
-    } catch {}
+      await apiFetch('/api/auth/signout', { method: 'POST' });
+    } catch (err) {
+      console.warn('Signout request error:', err);
+    } finally {
+      setCurrentUser(null);
+      setActiveSessions([]);
+      try {
+        localStorage.removeItem(STORAGE_KEY_CURRENT_USER);
+        sessionStorage.clear();
+      } catch {}
+    }
   };
+
+  const signOutAllSessionsAction = async (): Promise<{ success: boolean; error?: string }> => {
+    try {
+      await apiFetch('/api/auth/signout-all', { method: 'POST' });
+    } catch (err) {
+      console.warn('Signout all request error:', err);
+    } finally {
+      setCurrentUser(null);
+      setActiveSessions([]);
+      try {
+        localStorage.removeItem(STORAGE_KEY_CURRENT_USER);
+        sessionStorage.clear();
+      } catch {}
+    }
+    return { success: true };
+  };
+
+  const refreshSessionsAction = async () => {
+    try {
+      const res = await apiFetch('/api/auth/sessions');
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.sessions)) {
+          setActiveSessions(data.sessions);
+        }
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  const revokeSessionAction = async (sessionId: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const res = await apiFetch(`/api/auth/sessions/${sessionId}`, { method: 'DELETE' });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        setActiveSessions(prev => prev.filter(s => s.id !== sessionId));
+        return { success: true };
+      }
+      return { success: false, error: data.error || 'Failed to revoke session' };
+    } catch {
+      return { success: false, error: 'Network error revoking session' };
+    }
+  };
+
+  // Restore authenticated session automatically across browser refreshes, tabs, or restarts
+  useEffect(() => {
+    let isMounted = true;
+
+    async function restorePersistentSession() {
+      try {
+        const res = await apiFetch('/api/auth/session');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.authenticated && data.user) {
+            if (isMounted) {
+              const authUser: User = {
+                ...data.user,
+                avatar: '',
+                passwordHash: '',
+                friends: data.user.friends || [],
+                selectedTheme: data.user.selectedTheme || 'graphite',
+                groupPrivacy: data.user.groupPrivacy || 'friends',
+              };
+
+              setUsers(prev => {
+                const map = new Map<string, User>();
+                prev.forEach(u => map.set(u.username.toLowerCase(), u));
+                map.set(authUser.username.toLowerCase(), authUser);
+                return Array.from(map.values());
+              });
+
+              setCurrentUser(authUser);
+
+              if (authUser.selectedTheme) {
+                setSelectedTheme(authUser.selectedTheme);
+                applyThemeToDocument(authUser.selectedTheme);
+              }
+              if (authUser.groupPrivacy) {
+                setGroupPrivacy(authUser.groupPrivacy);
+              }
+
+              // Load active sessions list
+              apiFetch('/api/auth/sessions')
+                .then(r => r.json())
+                .then(d => {
+                  if (isMounted && Array.isArray(d.sessions)) {
+                    setActiveSessions(d.sessions);
+                  }
+                })
+                .catch(() => {});
+            }
+            return;
+          }
+        }
+
+        // If backend returns not authenticated, clear state
+        if (isMounted) {
+          setCurrentUser(null);
+          try {
+            localStorage.removeItem(STORAGE_KEY_CURRENT_USER);
+            sessionStorage.clear();
+          } catch {}
+        }
+      } catch (err) {
+        console.warn('[Noir Archive] Session restoration check failed:', err);
+      } finally {
+        if (isMounted) {
+          setIsRestoringSession(false);
+        }
+      }
+    }
+
+    restorePersistentSession();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const switchUserQuick = (username: string) => {
     const target = users.find(u => u.username.toLowerCase() === username.toLowerCase());
@@ -1435,6 +1575,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         signOut,
         switchUserQuick,
         searchAccountsGlobally,
+        isRestoringSession,
+        activeSessions,
+        refreshSessionsAction,
+        revokeSessionAction,
+        signOutAllSessionsAction,
         isTransferModalOpen,
         setIsTransferModalOpen,
         sendTransfer,

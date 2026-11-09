@@ -97,6 +97,7 @@ export interface ActiveSession {
   ip: string;
   lastActive: string;
   current?: boolean;
+  createdAt?: string;
 }
 
 export interface UserSettings {

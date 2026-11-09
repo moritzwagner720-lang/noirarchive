@@ -307,22 +307,27 @@ export const AuthGate: React.FC = () => {
               {/* Submit Button */}
               <button
                 type="submit"
-                className="w-full mt-2 flex items-center justify-center gap-2 rounded-xl py-3 font-sans text-xs font-bold text-white shadow-lg transition-all hover:brightness-110 active:scale-[0.99]"
+                className="w-full mt-2 flex items-center justify-center gap-2 rounded-xl py-3 font-sans text-xs font-bold text-white shadow-lg transition-all hover:brightness-110 active:scale-[0.99] cursor-pointer"
                 style={{ backgroundColor: 'var(--color-accent, #5865f2)' }}
               >
                 <span>{mode === 'signin' ? 'Sign In & Access Platform' : 'Register Handle & Enter'}</span>
                 <ArrowRight className="h-4 w-4 stroke-[2.5]" />
               </button>
+
+              <div className="flex items-center justify-center gap-1.5 pt-1 text-[11px] text-neutral-400 font-mono-code">
+                <CheckCircle2 className="h-3 w-3 text-emerald-400" />
+                <span>Persistent login active: Stays signed in across browser sessions</span>
+              </div>
             </form>
 
             {/* Notice */}
-            <div className="mt-6 border-t pt-4 border-[#383a40] text-neutral-400">
+            <div className="mt-5 border-t pt-4 border-[#383a40] text-neutral-400">
               <div className="flex items-center gap-1.5 font-mono-code text-[11px] font-semibold text-neutral-300 uppercase tracking-wider mb-1">
                 <Lock className="h-3.5 w-3.5" />
                 <span>Protected Archive Access</span>
               </div>
               <p className="font-sans text-[11px] opacity-75">
-                Passwords are authenticated securely and stored hashed. Handles are permanent 1-of-1 registrations.
+                Passwords are authenticated securely and stored hashed. Persistent sessions are validated server-side using secure HttpOnly cookies.
               </p>
             </div>
           </div>

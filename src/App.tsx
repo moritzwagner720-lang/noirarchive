@@ -34,6 +34,7 @@ const AppContent: React.FC = () => {
     setActivePreviewMedia,
     activeReportModalPackage,
     setActiveReportModalPackage,
+    isRestoringSession,
   } = useApp();
 
   // Strict scroll position reset: Always start at top on navigation
@@ -56,6 +57,33 @@ const AppContent: React.FC = () => {
       return () => cancelAnimationFrame(raf);
     }
   }, [activeTab, activeTransferPortalId]);
+
+  // Professional Session Restoration Loading State (prevents login screen flicker for returning users)
+  if (isRestoringSession) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-[#1e1f22] text-white relative overflow-hidden select-none">
+        <SeasonalBackground />
+        <div className="relative z-10 flex flex-col items-center max-w-sm px-6 text-center">
+          <div className="relative flex items-center justify-center mb-6">
+            <div className="absolute -inset-4 rounded-3xl bg-indigo-500/10 blur-xl animate-pulse" />
+            <NoirArchiveLogo size="lg" showText={false} className="relative z-10" />
+          </div>
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
+            <span className="font-sans font-bold tracking-wider text-sm uppercase text-neutral-200">
+              NOIR ARCHIVE
+            </span>
+          </div>
+          <p className="font-sans text-xs text-neutral-400">
+            Restoring secure archive session...
+          </p>
+          <div className="w-48 h-1 bg-[#2b2d31] rounded-full overflow-hidden mt-6 border border-[#383a40]">
+            <div className="h-full bg-indigo-500 rounded-full animate-pulse w-3/4" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Strict Login Gate
   if (!currentUser) {

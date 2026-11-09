@@ -3,6 +3,7 @@
     {
       "id": "user-moritz",
       "username": "moritz",
+      "displayName": "Moritz",
       "bio": "Software engineer and file sharing enthusiast. Sending project archives and developer packages.",
       "avatar": "",
       "location": "Berlin",
@@ -13,11 +14,43 @@
         "kenji_mono"
       ],
       "selectedTheme": "graphite",
-      "groupPrivacy": "friends"
+      "groupPrivacy": "friends",
+      "settings": {
+        "matureContentFilter": "warn",
+        "publicVisibility": "everyone",
+        "defaultExpiryDays": 7,
+        "notificationSounds": true,
+        "seasonalEffectsEnabled": true,
+        "language": "en"
+      },
+      "favoritePackageIds": [],
+      "activeSessions": [
+        {
+          "id": "sess_1794254230132_01146356",
+          "client": "Chrome",
+          "ip": "127.0.0.1",
+          "lastActive": "Just now",
+          "current": true
+        },
+        {
+          "id": "sess-1",
+          "client": "Chrome 124 (macOS)",
+          "ip": "192.168.1.10",
+          "lastActive": "Just now",
+          "current": true
+        },
+        {
+          "id": "sess-2",
+          "client": "Noir Archive Desktop v1.0",
+          "ip": "192.168.1.15",
+          "lastActive": "2 hours ago"
+        }
+      ]
     },
     {
       "id": "user-elena",
       "username": "elena_k",
+      "displayName": "Elena K.",
       "bio": "Product designer and multimedia collaborator. Sharing asset libraries and design folders.",
       "avatar": "",
       "location": "Paris",
@@ -27,11 +60,22 @@
         "moritz"
       ],
       "selectedTheme": "graphite",
-      "groupPrivacy": "friends"
+      "groupPrivacy": "friends",
+      "settings": {
+        "matureContentFilter": "warn",
+        "publicVisibility": "everyone",
+        "defaultExpiryDays": 14,
+        "notificationSounds": true,
+        "seasonalEffectsEnabled": true,
+        "language": "en"
+      },
+      "favoritePackageIds": [],
+      "activeSessions": []
     },
     {
       "id": "user-kenji",
       "username": "kenji_mono",
+      "displayName": "Kenji Mono",
       "bio": "System architect. Exchanging encrypted datasets and engineering build bundles.",
       "avatar": "",
       "location": "Tokyo",
@@ -41,11 +85,22 @@
         "moritz"
       ],
       "selectedTheme": "graphite",
-      "groupPrivacy": "friends"
+      "groupPrivacy": "friends",
+      "settings": {
+        "matureContentFilter": "warn",
+        "publicVisibility": "everyone",
+        "defaultExpiryDays": 30,
+        "notificationSounds": false,
+        "seasonalEffectsEnabled": true,
+        "language": "en"
+      },
+      "favoritePackageIds": [],
+      "activeSessions": []
     },
     {
       "id": "user-daddy",
       "username": "daddy",
+      "displayName": "Daddy",
       "bio": "Verified member & archive curator.",
       "avatar": "",
       "location": "Berlin",
@@ -53,7 +108,17 @@
       "createdAt": "2024-04-01T09:30:00.000Z",
       "friends": [],
       "selectedTheme": "graphite",
-      "groupPrivacy": "friends"
+      "groupPrivacy": "friends",
+      "settings": {
+        "matureContentFilter": "warn",
+        "publicVisibility": "everyone",
+        "defaultExpiryDays": 7,
+        "notificationSounds": true,
+        "seasonalEffectsEnabled": true,
+        "language": "en"
+      },
+      "favoritePackageIds": [],
+      "activeSessions": []
     }
   ],
   "friendRequests": [],
@@ -68,5 +133,7 @@
   ],
   "groups": [],
   "transfers": [],
-  "publishedPackages": []
+  "publishedPackages": [],
+  "reports": [],
+  "sessions": []
 }

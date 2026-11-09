@@ -25,6 +25,9 @@ import {
   Clock,
   KeyRound,
   Save,
+  Laptop,
+  Globe,
+  Trash2,
 } from 'lucide-react';
 
 export const SettingsView: React.FC = () => {
@@ -43,6 +46,10 @@ export const SettingsView: React.FC = () => {
     signOut,
     groups,
     transfers,
+    activeSessions,
+    refreshSessionsAction,
+    revokeSessionAction,
+    signOutAllSessionsAction,
   } = useApp();
 
   const [activeSection, setActiveSection] = useState<'appearance' | 'privacy' | 'security' | 'notifications' | 'account'>('appearance');
@@ -1033,6 +1040,103 @@ export const SettingsView: React.FC = () => {
                   </div>
                 </form>
 
+                {/* Active Sessions & Remembered Devices (Gmail-style persistent auth management) */}
+                <div className="pt-5 border-t border-[#383a40] space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="font-mono-code text-xs uppercase font-bold text-neutral-300 flex items-center gap-2">
+                        <Laptop className="h-4 w-4 text-indigo-400" />
+                        <span>Active Sessions & Remembered Devices</span>
+                      </h4>
+                      <p className="text-[11px] text-neutral-400 mt-0.5">
+                        Your session stays authenticated across browser restarts and page refreshes.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        refreshSessionsAction();
+                        showSuccess('Sessions refreshed');
+                      }}
+                      className="text-[11px] font-mono-code text-indigo-400 hover:underline cursor-pointer"
+                    >
+                      Refresh
+                    </button>
+                  </div>
+
+                  <div className="space-y-2">
+                    {activeSessions.length > 0 ? (
+                      activeSessions.map(sess => (
+                        <div
+                          key={sess.id}
+                          className={`flex items-center justify-between p-3 rounded-xl border text-xs ${
+                            sess.current
+                              ? 'bg-indigo-500/10 border-indigo-500/30 text-white'
+                              : 'bg-[#232428] border-[#383a40] text-neutral-300'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="p-2 rounded-lg bg-[#1e1f22] border border-[#383a40] shrink-0">
+                              <Laptop className="h-4 w-4 text-neutral-300" />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold truncate">{sess.client || 'Web Browser'}</span>
+                                {sess.current && (
+                                  <span className="flex items-center gap-1 text-[10px] font-mono-code font-bold uppercase px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                    This Browser
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2 text-[11px] text-neutral-400 mt-0.5 font-mono-code">
+                                <span className="truncate">IP: {sess.ip || '127.0.0.1'}</span>
+                                <span>•</span>
+                                <span>{sess.lastActive}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {!sess.current && (
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                const res = await revokeSessionAction(sess.id);
+                                if (res.success) {
+                                  showSuccess('Session revoked');
+                                } else {
+                                  showError(res.error || 'Failed to revoke');
+                                }
+                              }}
+                              className="text-xs text-rose-400 hover:text-rose-300 px-2 py-1 rounded hover:bg-rose-500/10 transition-all font-mono-code cursor-pointer shrink-0"
+                            >
+                              Revoke
+                            </button>
+                          )}
+                        </div>
+                      ))
+                    ) : (
+                      <div className="flex items-center justify-between p-3 rounded-xl border bg-indigo-500/10 border-indigo-500/30 text-white text-xs">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 rounded-lg bg-[#1e1f22] border border-[#383a40]">
+                            <Laptop className="h-4 w-4 text-neutral-300" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold">Current Browser Session</span>
+                              <span className="flex items-center gap-1 text-[10px] font-mono-code font-bold uppercase px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                Active
+                              </span>
+                            </div>
+                            <span className="text-[11px] text-neutral-400 font-mono-code">Persistent HttpOnly Cookie • 30 Days</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
                 {/* Account Metadata */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-4 border-t border-[#383a40] font-mono-code text-xs">
                   <div className="rounded-xl bg-[#232428] border border-[#383a40] p-3">
@@ -1047,13 +1151,28 @@ export const SettingsView: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="pt-2 flex justify-end">
+                {/* Logout Options */}
+                <div className="pt-2 flex flex-wrap items-center justify-between gap-3">
                   <button
+                    type="button"
+                    onClick={async () => {
+                      if (window.confirm('Are you sure you want to log out of all active sessions across all devices?')) {
+                        await signOutAllSessionsAction();
+                      }
+                    }}
+                    className="flex items-center gap-1.5 text-xs font-mono-code text-neutral-400 hover:text-rose-400 transition-colors cursor-pointer"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    <span>Log Out of All Sessions</span>
+                  </button>
+
+                  <button
+                    type="button"
                     onClick={signOut}
                     className="flex items-center gap-2 rounded-xl bg-rose-500/15 border border-rose-500/30 px-4 py-2 text-xs font-semibold text-rose-300 hover:bg-rose-500/25 transition-all cursor-pointer"
                   >
                     <LogOut className="h-3.5 w-3.5" />
-                    <span>Sign Out from Device</span>
+                    <span>Sign Out from This Device</span>
                   </button>
                 </div>
               </div>
