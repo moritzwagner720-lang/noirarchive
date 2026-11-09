@@ -88,7 +88,7 @@ export const AuthGate: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col justify-between bg-[#1e1f22] text-white relative overflow-hidden">
+    <div className="min-h-screen flex flex-col justify-between bg-transparent text-white relative overflow-hidden">
       {/* Top Bar with brand & version */}
       <header className="border-b px-4 py-4 sm:px-8 bg-[#2b2d31]/80 border-[#383a40] backdrop-blur-md relative z-10">
         <div className="mx-auto flex max-w-7xl items-center justify-between">

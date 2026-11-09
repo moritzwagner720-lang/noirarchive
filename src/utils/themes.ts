@@ -1,5 +1,8 @@
 import { ThemeDefinition, ThemeId } from '../types';
 
+export const CHRISTMAS_BACKGROUND_IMAGE = '/assets/themes/christmas-bg.jpg';
+export const HALLOWEEN_BACKGROUND_IMAGE = '/assets/themes/halloween-bg.jpg';
+
 export const THEMES: ThemeDefinition[] = [
   {
     id: 'graphite',
@@ -145,7 +148,7 @@ export const THEMES: ThemeDefinition[] = [
     id: 'christmas',
     name: 'Christmas Theme',
     type: 'seasonal',
-    description: 'Festive dark pine forest green, deep crimson red, and warm gold highlights.',
+    description: 'Festive holiday atmosphere with winter pine trees under a glowing full moon and soft falling snow.',
     accentHex: '#dc2626',
     accentHoverHex: '#b91c1c',
     accentText: '#ffffff',
@@ -154,12 +157,13 @@ export const THEMES: ThemeDefinition[] = [
     bgElevated: '#153623',
     borderColor: '#204d32',
     previewColors: ['#07160d', '#153623', '#dc2626'],
+    backgroundImage: CHRISTMAS_BACKGROUND_IMAGE,
   },
   {
     id: 'halloween',
     name: 'Halloween Theme',
     type: 'seasonal',
-    description: 'Optional nocturnal midnight purple & deep obsidian with pumpkin orange & spectral violet.',
+    description: 'Spooky nocturnal midnight sky, full moon silhouette, dark horizon and barren trees with floating embers.',
     accentHex: '#ff6b00',
     accentHoverHex: '#ea580c',
     accentText: '#000000',
@@ -168,6 +172,7 @@ export const THEMES: ThemeDefinition[] = [
     bgElevated: '#211433',
     borderColor: '#372054',
     previewColors: ['#0d0714', '#211433', '#ff6b00'],
+    backgroundImage: HALLOWEEN_BACKGROUND_IMAGE,
   },
 ];
 
@@ -201,6 +206,12 @@ export function applyThemeToDocument(themeId: ThemeId): void {
   const secondaryAccent =
     t.id === 'christmas' ? '#f59e0b' : t.id === 'halloween' ? '#a855f7' : '#949ba4';
   root.style.setProperty('--color-secondary-accent', secondaryAccent);
+
+  if (t.backgroundImage) {
+    root.style.setProperty('--theme-bg-image', `url(${t.backgroundImage})`);
+  } else {
+    root.style.removeProperty('--theme-bg-image');
+  }
 
   document.body.style.backgroundColor = t.bgBase;
   document.body.style.color = '#f3f4f6';

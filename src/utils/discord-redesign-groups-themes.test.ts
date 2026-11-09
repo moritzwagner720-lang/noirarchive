@@ -109,6 +109,26 @@ describe('2. Complete Theme Customization System (Requirement 6)', () => {
     assert.equal(isSeasonalTheme('graphite'), false);
     assert.equal(isSeasonalTheme('midnight'), false);
   });
+
+  test('seasonal themes have custom background images configured', () => {
+    const christmas = getThemeById('christmas');
+    const halloween = getThemeById('halloween');
+
+    assert.ok(christmas.backgroundImage, 'Christmas theme must have a background image');
+    assert.ok(halloween.backgroundImage, 'Halloween theme must have a background image');
+
+    assert.ok(christmas.backgroundImage.includes('christmas-bg.jpg') || christmas.backgroundImage.includes('zpJ61'));
+    assert.ok(halloween.backgroundImage.includes('halloween-bg.jpg') || halloween.backgroundImage.includes('1MHV8'));
+
+    // Standard themes must retain original backgrounds (no background image)
+    const graphite = getThemeById('graphite');
+    const midnight = getThemeById('midnight');
+    const arctic = getThemeById('arctic');
+
+    assert.equal(graphite.backgroundImage, undefined, 'Graphite theme must retain original charcoal background');
+    assert.equal(midnight.backgroundImage, undefined, 'Midnight theme must retain original background');
+    assert.equal(arctic.backgroundImage, undefined, 'Arctic theme must retain original background');
+  });
 });
 
 describe('3. Friend Groups System (Requirement 4)', () => {

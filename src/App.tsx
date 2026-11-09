@@ -61,7 +61,7 @@ const AppContent: React.FC = () => {
   // Professional Session Restoration Loading State (prevents login screen flicker for returning users)
   if (isRestoringSession) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-[#1e1f22] text-white relative overflow-hidden select-none">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-[var(--color-bg-base,#1e1f22)] text-white relative overflow-hidden select-none">
         <SeasonalBackground />
         <div className="relative z-10 flex flex-col items-center max-w-sm px-6 text-center">
           <div className="relative flex items-center justify-center mb-6">
@@ -88,7 +88,7 @@ const AppContent: React.FC = () => {
   // Strict Login Gate
   if (!currentUser) {
     return (
-      <div className="flex flex-col min-h-screen bg-[#1e1f22] text-white">
+      <div className="flex flex-col min-h-screen bg-[var(--color-bg-base,#1e1f22)] text-white relative">
         <SeasonalBackground />
         <AuthGate />
       </div>
@@ -98,7 +98,7 @@ const AppContent: React.FC = () => {
   // If a direct transfer link is accessed (e.g. ?transfer=TR-4912)
   if (activeTransferPortalId) {
     return (
-      <div className="min-h-screen bg-[#1e1f22] text-white flex flex-col justify-between relative">
+      <div className="min-h-screen bg-[var(--color-bg-base,#1e1f22)] text-white flex flex-col justify-between relative">
         <SeasonalBackground />
         <div className="relative z-10">
           <Navbar />
@@ -131,7 +131,7 @@ const AppContent: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#1e1f22] text-white flex flex-col justify-between relative">
+    <div className="min-h-screen bg-[var(--color-bg-base,#1e1f22)] text-white flex flex-col justify-between relative">
       <SeasonalBackground />
       <div className="relative z-10">
         <Navbar />
@@ -171,7 +171,7 @@ const AppContent: React.FC = () => {
       </div>
 
       {/* Clean Discord-Inspired Grey Footer with Safety Disclaimers */}
-      <footer className="relative z-10 border-t py-8 px-4 sm:px-6 mt-16 border-[#383a40] bg-[#1e1f22] text-neutral-400">
+      <footer className="relative z-10 border-t py-8 px-4 sm:px-6 mt-16 border-[#383a40] bg-[#1e1f22]/90 backdrop-blur-md text-neutral-400">
         <div className="mx-auto max-w-7xl space-y-5">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between font-mono-code text-xs">
             <div className="flex items-center gap-3">

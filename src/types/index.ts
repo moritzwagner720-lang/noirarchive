@@ -80,6 +80,7 @@ export interface ThemeDefinition {
   bgElevated: string;
   borderColor: string;
   previewColors: [string, string, string];
+  backgroundImage?: string;
 }
 
 export interface FriendGroup {

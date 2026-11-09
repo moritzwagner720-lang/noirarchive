@@ -147,7 +147,7 @@ export const HeroTransferSection: React.FC = () => {
   const totalStagedSize = stagedFiles.reduce((acc, f) => acc + (parseFloat(f.size) || 1), 0).toFixed(1);
 
   return (
-    <div className="relative overflow-hidden bg-[#1e1f22] text-neutral-100">
+    <div className="relative overflow-hidden bg-transparent text-neutral-100">
       {/* Discord-style subtle mesh background */}
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_0%,rgba(88,101,242,0.12),transparent_70%)]" />
 

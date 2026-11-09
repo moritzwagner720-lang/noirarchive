@@ -403,26 +403,22 @@ export const SettingsView: React.FC = () => {
                         }}
                       >
                         <div
-                          className="h-16 w-full rounded-xl overflow-hidden border border-white/10 flex p-2 gap-2 shadow-inner"
-                          style={{ backgroundColor: t.bgBase }}
+                          className="h-16 w-full rounded-xl overflow-hidden border border-white/10 relative shadow-inner bg-cover bg-center"
+                          style={{
+                            backgroundImage: t.backgroundImage ? `url(${t.backgroundImage})` : undefined,
+                            backgroundColor: t.bgBase,
+                          }}
                         >
-                          <div
-                            className="w-1/3 rounded-lg flex items-center justify-center text-[10px] font-bold text-white shadow-sm"
-                            style={{ backgroundColor: t.bgSurface }}
-                          >
-                            <span className="opacity-80">Atmosphere</span>
-                          </div>
-                          <div
-                            className="w-1/3 rounded-lg flex items-center justify-center text-[10px] font-bold text-white shadow-sm"
-                            style={{ backgroundColor: t.bgElevated }}
-                          >
-                            <span className="opacity-80">Glow</span>
-                          </div>
-                          <div
-                            className="w-1/3 rounded-lg flex items-center justify-center text-[10px] font-bold shadow-md"
-                            style={{ backgroundColor: t.accentHex, color: t.accentText }}
-                          >
-                            <span>Festive</span>
+                          <div className="absolute inset-0 bg-black/40 backdrop-brightness-95 flex items-center justify-between p-2">
+                            <span className="px-2 py-0.5 rounded-lg text-[10px] font-bold text-white shadow-sm bg-black/60 backdrop-blur-sm border border-white/10">
+                              Full Background
+                            </span>
+                            <span
+                              className="px-2 py-0.5 rounded-lg text-[10px] font-bold shadow-md"
+                              style={{ backgroundColor: t.accentHex, color: t.accentText }}
+                            >
+                              {t.id === 'christmas' ? 'Christmas Pine' : 'Halloween Night'}
+                            </span>
                           </div>
                         </div>
 
