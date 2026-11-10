@@ -54,7 +54,9 @@ export function createChatMessage(
     title: string;
     files: TransferFile[];
     totalSize: string;
-  }
+  },
+  groupId?: string,
+  replyTo?: { id: string; senderUsername: string; text: string }
 ): ChatMessage {
   if (!text.trim() && !attachment) {
     throw new Error('Message cannot be empty without an attachment.');
@@ -66,6 +68,9 @@ export function createChatMessage(
     recipientUsername: recipientUsername.toLowerCase().trim(),
     text: text.trim(),
     attachment,
+    groupId,
+    replyTo,
+    reactions: {},
     createdAt: new Date().toISOString(),
   };
 }

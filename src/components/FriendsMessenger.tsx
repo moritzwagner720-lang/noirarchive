@@ -26,6 +26,12 @@ import {
   Check,
   X,
   Share2,
+  Reply,
+  Smile,
+  UserX,
+  Crown,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 
 export const FriendsMessenger: React.FC = () => {
@@ -45,7 +51,10 @@ export const FriendsMessenger: React.FC = () => {
     sendFriendRequestAction,
     acceptFriendRequestAction,
     declineFriendRequestAction,
+    removeFriendAction,
     sendChatMessageAction,
+    sendGroupChatMessageAction,
+    toggleMessageReactionAction,
     activeChatFriend,
     setActiveChatFriend,
     setIsTransferModalOpen,
@@ -68,12 +77,16 @@ export const FriendsMessenger: React.FC = () => {
   const [editGroupNameInput, setEditGroupNameInput] = useState('');
   const [addMemberInput, setAddMemberInput] = useState('');
   const [groupFeedback, setGroupFeedback] = useState<{ success: boolean; message: string } | null>(null);
+  const [showMembersPanel, setShowMembersPanel] = useState(false);
 
-  // Messaging & Attachments
+  // Messaging, Attachments, Replies & Reactions
   const [messageText, setMessageText] = useState('');
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [isRequestsModalOpen, setIsRequestsModalOpen] = useState(false);
   const [isZipping, setIsZipping] = useState<string | null>(null);
+  const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
+  const [showRemoveFriendConfirm, setShowRemoveFriendConfirm] = useState(false);
+  const [activeReactionPickerMsgId, setActiveReactionPickerMsgId] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -236,35 +249,76 @@ export const FriendsMessenger: React.FC = () => {
     setTimeout(() => setGroupFeedback(null), 4000);
   };
 
-  // Chat conversation messages
-  const conversationMessages = chatMessages.filter(
-    m =>
-      activeChatFriend &&
-      ((m.senderUsername.toLowerCase() === currentUser.username.toLowerCase() &&
-        m.recipientUsername.toLowerCase() === activeChatFriend.toLowerCase()) ||
-        (m.senderUsername.toLowerCase() === activeChatFriend.toLowerCase() &&
-          m.recipientUsername.toLowerCase() === currentUser.username.toLowerCase()))
-  );
+  // Remove Friend from 1-on-1 contact list
+  const handleRemoveFriend = async () => {
+    if (!activeChatFriend) return;
+    const target = activeChatFriend;
+    const res = await removeFriendAction(target);
+    setShowRemoveFriendConfirm(false);
+    if (res.success) {
+      setActiveChatFriend(null);
+      setRequestFeedback({ success: true, message: `Removed @${target} from your friends.` });
+    } else {
+      setRequestFeedback({ success: false, message: res.error || 'Failed to remove friend.' });
+    }
+    setTimeout(() => setRequestFeedback(null), 4000);
+  };
+
+  // Chat conversation messages: filters by active group or 1-on-1 friend
+  const conversationMessages = chatMessages.filter(m => {
+    if (activeGroup) {
+      return m.groupId === activeGroup.id;
+    }
+    if (activeChatFriend) {
+      return (
+        !m.groupId &&
+        ((m.senderUsername.toLowerCase() === currentUser.username.toLowerCase() &&
+          m.recipientUsername.toLowerCase() === activeChatFriend.toLowerCase()) ||
+          (m.senderUsername.toLowerCase() === activeChatFriend.toLowerCase() &&
+            m.recipientUsername.toLowerCase() === currentUser.username.toLowerCase()))
+      );
+    }
+    return false;
+  });
 
   // Auto-scroll chat inside container
   useEffect(() => {
     if (chatContainerRef.current) {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
-  }, [conversationMessages.length, activeChatFriend]);
+  }, [conversationMessages.length, activeChatFriend, activeGroupId]);
 
   // Send regular text message
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activeChatFriend || !messageText.trim()) return;
-    sendChatMessageAction(activeChatFriend, messageText.trim());
+    if (!messageText.trim()) return;
+
+    const replyObj = replyingTo
+      ? {
+          id: replyingTo.id,
+          senderUsername: replyingTo.senderUsername,
+          text: replyingTo.text
+            ? replyingTo.text.length > 80
+              ? replyingTo.text.slice(0, 80) + '...'
+              : replyingTo.text
+            : '[Attachment]',
+        }
+      : undefined;
+
+    if (activeGroup) {
+      sendGroupChatMessageAction(activeGroup.id, messageText.trim(), undefined, replyObj);
+    } else if (activeChatFriend) {
+      sendChatMessageAction(activeChatFriend, messageText.trim(), undefined);
+    }
+
     setMessageText('');
+    setReplyingTo(null);
   };
 
   // Send specific file attachment in chat
   const handleSendFileAttachment = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !activeChatFriend) return;
+    if (!file || (!activeChatFriend && !activeGroup)) return;
 
     const reader = new FileReader();
     reader.onload = () => {
@@ -283,8 +337,26 @@ export const FriendsMessenger: React.FC = () => {
         files: [tf],
         totalSize: `${sizeMb} MB`,
       };
-      sendChatMessageAction(activeChatFriend, messageText.trim() || `Sent file: ${file.name}`, attachment);
+
+      const replyObj = replyingTo
+        ? {
+            id: replyingTo.id,
+            senderUsername: replyingTo.senderUsername,
+            text: replyingTo.text
+              ? replyingTo.text.length > 80
+                ? replyingTo.text.slice(0, 80) + '...'
+                : replyingTo.text
+              : '[Attachment]',
+          }
+        : undefined;
+
+      if (activeGroup) {
+        sendGroupChatMessageAction(activeGroup.id, messageText.trim() || `Shared file: ${file.name}`, attachment, replyObj);
+      } else if (activeChatFriend) {
+        sendChatMessageAction(activeChatFriend, messageText.trim() || `Sent file: ${file.name}`, attachment);
+      }
       setMessageText('');
+      setReplyingTo(null);
       setShowAttachMenu(false);
     };
     reader.readAsDataURL(file);
@@ -293,12 +365,12 @@ export const FriendsMessenger: React.FC = () => {
   // Send folder attachment in chat
   const handleSendFolderAttachment = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    if (!files || files.length === 0 || !activeChatFriend) return;
+    if (!files || files.length === 0 || (!activeChatFriend && !activeGroup)) return;
 
     const folderName = files[0].webkitRelativePath?.split('/')[0] || 'Shared_Folder';
     const compiled: TransferFile[] = [];
 
-    Array.from(files).slice(0, 15).forEach((file, idx) => {
+    Array.from(files).slice(0, 20).forEach((file, idx) => {
       const reader = new FileReader();
       reader.onload = () => {
         const url = reader.result as string;
@@ -312,7 +384,7 @@ export const FriendsMessenger: React.FC = () => {
           folderPath: folderName,
         });
 
-        if (compiled.length === Math.min(files.length, 15)) {
+        if (compiled.length === Math.min(files.length, 20)) {
           const totalSizeMb = compiled.reduce((acc, f) => acc + (parseFloat(f.size) || 1), 0).toFixed(1);
           const attachment: ChatAttachment = {
             type: 'folder',
@@ -320,12 +392,35 @@ export const FriendsMessenger: React.FC = () => {
             files: compiled,
             totalSize: `${totalSizeMb} MB`,
           };
-          sendChatMessageAction(
-            activeChatFriend,
-            messageText.trim() || `Sent folder: ${folderName} (${compiled.length} files)`,
-            attachment
-          );
+
+          const replyObj = replyingTo
+            ? {
+                id: replyingTo.id,
+                senderUsername: replyingTo.senderUsername,
+                text: replyingTo.text
+                  ? replyingTo.text.length > 80
+                    ? replyingTo.text.slice(0, 80) + '...'
+                    : replyingTo.text
+                  : '[Attachment]',
+              }
+            : undefined;
+
+          if (activeGroup) {
+            sendGroupChatMessageAction(
+              activeGroup.id,
+              messageText.trim() || `Shared folder: ${folderName} (${compiled.length} files)`,
+              attachment,
+              replyObj
+            );
+          } else if (activeChatFriend) {
+            sendChatMessageAction(
+              activeChatFriend,
+              messageText.trim() || `Sent folder: ${folderName} (${compiled.length} files)`,
+              attachment
+            );
+          }
           setMessageText('');
+          setReplyingTo(null);
           setShowAttachMenu(false);
         }
       };
@@ -713,122 +808,199 @@ export const FriendsMessenger: React.FC = () => {
           </div>
         </div>
 
-        {/* Right Main Panel: Group Details View OR 1-on-1 Chat (8 cols) */}
+        {/* Right Main Panel: Unified Discord-Style Messenger for Groups and 1-on-1 Chats (8 cols) */}
         <div className="lg:col-span-8 flex flex-col justify-between h-[620px] bg-[#1e1f22]">
-          {/* VIEW A: FRIEND GROUP DETAIL VIEW */}
-          {activeGroup ? (
+          {activeGroup || activeChatFriend ? (
             <div className="flex-1 flex flex-col justify-between overflow-hidden">
-              {/* Group Header */}
-              <div className="p-4 border-b border-[#383a40] bg-[#2b2d31] flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div
-                    className="h-10 w-10 rounded-2xl flex items-center justify-center font-bold text-base text-white shadow-sm"
-                    style={{ backgroundColor: 'var(--color-accent, #5865f2)' }}
-                  >
-                    {activeGroup.name.charAt(0).toUpperCase()}
-                  </div>
+              {/* Header Bar */}
+              <div className="p-3.5 border-b border-[#383a40] bg-[#2b2d31] flex items-center justify-between">
+                {activeGroup ? (
+                  /* GROUP HEADER */
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div
+                      className="h-10 w-10 rounded-2xl flex items-center justify-center font-bold text-base text-white shadow-sm shrink-0"
+                      style={{ backgroundColor: 'var(--color-accent, #5865f2)' }}
+                    >
+                      {activeGroup.name.charAt(0).toUpperCase()}
+                    </div>
 
-                  <div>
-                    {isEditingGroupName ? (
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="text"
-                          value={editGroupNameInput}
-                          onChange={e => setEditGroupNameInput(e.target.value)}
-                          className="rounded-lg border border-[#383a40] bg-[#1e1f22] px-2 py-1 text-xs text-white focus:outline-none focus:border-[var(--color-accent)]"
-                        />
-                        <button
-                          onClick={handleRenameGroup}
-                          className="rounded bg-emerald-600 px-2 py-1 text-xs font-bold text-white"
-                        >
-                          Save
-                        </button>
-                        <button
-                          onClick={() => setIsEditingGroupName(false)}
-                          className="rounded bg-[#383a40] px-2 py-1 text-xs text-neutral-300"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        <h2 className="text-base font-bold text-white">
-                          {activeGroup.name}
-                        </h2>
-                        {activeGroup.ownerUsername.toLowerCase() === currentUser.username.toLowerCase() && (
+                    <div className="min-w-0">
+                      {isEditingGroupName ? (
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={editGroupNameInput}
+                            onChange={e => setEditGroupNameInput(e.target.value)}
+                            className="rounded-lg border border-[#383a40] bg-[#1e1f22] px-2 py-1 text-xs text-white focus:outline-none focus:border-[var(--color-accent)] font-mono-code"
+                          />
                           <button
-                            onClick={() => {
-                              setEditGroupNameInput(activeGroup.name);
-                              setIsEditingGroupName(true);
-                            }}
-                            className="text-neutral-400 hover:text-white"
-                            title="Rename Group"
+                            onClick={handleRenameGroup}
+                            className="rounded bg-emerald-600 px-2 py-1 text-xs font-bold text-white"
                           >
-                            <Edit2 className="h-3 w-3" />
+                            Save
                           </button>
-                        )}
-                      </div>
-                    )}
-                    <p className="font-mono-code text-[11px] text-neutral-400">
-                      Created by @{activeGroup.ownerUsername} • {activeGroup.memberUsernames.length} members
-                    </p>
+                          <button
+                            onClick={() => setIsEditingGroupName(false)}
+                            className="rounded bg-[#383a40] px-2 py-1 text-xs text-neutral-300"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <h2 className="text-sm font-bold text-white truncate">
+                            {activeGroup.name}
+                          </h2>
+                          {activeGroup.ownerUsername.toLowerCase() === currentUser.username.toLowerCase() && (
+                            <button
+                              onClick={() => {
+                                setEditGroupNameInput(activeGroup.name);
+                                setIsEditingGroupName(true);
+                              }}
+                              className="text-neutral-400 hover:text-white"
+                              title="Rename Group"
+                            >
+                              <Edit2 className="h-3 w-3" />
+                            </button>
+                          )}
+                        </div>
+                      )}
+                      <p className="font-mono-code text-[11px] text-neutral-400 truncate">
+                        Owner: @{activeGroup.ownerUsername} • {activeGroup.memberUsernames.length} members
+                      </p>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  /* 1-ON-1 CHAT HEADER */
+                  <div className="flex items-center gap-3 min-w-0">
+                    <UserAvatar username={activeChatFriend!} size="sm" showStatus={true} status="online" />
+                    <div className="min-w-0">
+                      <h2 className="font-mono-code text-xs font-bold text-white truncate">
+                        @{activeChatFriend}
+                      </h2>
+                      <p className="text-[10px] text-neutral-400">
+                        Encrypted peer transfer channel
+                      </p>
+                    </div>
+                  </div>
+                )}
 
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setIsTransferModalOpen(true)}
-                    className="flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-xs font-bold text-white shadow-sm transition-all"
-                    style={{ backgroundColor: 'var(--color-accent, #5865f2)' }}
-                  >
-                    <Upload className="h-3.5 w-3.5" />
-                    <span>Share to Group</span>
-                  </button>
+                {/* Header Action Buttons */}
+                <div className="flex items-center gap-2 shrink-0">
+                  {activeGroup ? (
+                    <>
+                      <button
+                        onClick={() => setShowMembersPanel(!showMembersPanel)}
+                        className={`flex items-center gap-1.5 rounded-lg border border-[#383a40] px-2.5 py-1 text-xs font-mono-code transition-colors ${
+                          showMembersPanel ? 'bg-[#313338] text-white border-neutral-400' : 'bg-[#232428] text-neutral-300 hover:text-white'
+                        }`}
+                      >
+                        <Users className="h-3.5 w-3.5" style={{ color: 'var(--color-accent)' }} />
+                        <span>Roster ({activeGroup.memberUsernames.length})</span>
+                        {showMembersPanel ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                      </button>
+
+                      <label className="flex items-center gap-1.5 rounded-lg border border-[#383a40] bg-[#313338] px-2.5 py-1 font-mono-code text-xs text-neutral-200 hover:border-neutral-500 cursor-pointer transition-colors">
+                        <Folder className="h-3.5 w-3.5" style={{ color: 'var(--color-accent)' }} />
+                        <span>Share Folder</span>
+                        {/* @ts-ignore */}
+                        <input
+                          type="file"
+                          // @ts-expect-error webkitdirectory
+                          webkitdirectory=""
+                          directory=""
+                          multiple
+                          onChange={handleSendFolderAttachment}
+                          className="hidden"
+                        />
+                      </label>
+
+                      {activeGroup.ownerUsername.toLowerCase() === currentUser.username.toLowerCase() ? (
+                        <button
+                          onClick={() => handleDeleteGroup(activeGroup.id)}
+                          className="flex items-center gap-1 rounded-lg border border-rose-900/40 bg-rose-950/20 px-2 py-1 text-xs text-rose-400 hover:bg-rose-900/40 transition-colors"
+                          title="Delete Group"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          <span className="hidden sm:inline">Delete</span>
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleRemoveMember(currentUser.username)}
+                          className="flex items-center gap-1 rounded-lg border border-[#383a40] bg-[#232428] px-2 py-1 text-xs text-neutral-400 hover:text-rose-400 transition-colors"
+                          title="Leave Group"
+                        >
+                          <UserMinus className="h-3.5 w-3.5" />
+                          <span className="hidden sm:inline">Leave</span>
+                        </button>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <label className="flex items-center gap-1.5 rounded-lg border border-[#383a40] bg-[#313338] px-3 py-1 font-mono-code text-[11px] text-neutral-200 hover:border-neutral-500 cursor-pointer transition-colors">
+                        <Folder className="h-3 w-3" style={{ color: 'var(--color-accent)' }} />
+                        <span>Send Folder</span>
+                        {/* @ts-ignore */}
+                        <input
+                          type="file"
+                          // @ts-expect-error webkitdirectory
+                          webkitdirectory=""
+                          directory=""
+                          multiple
+                          onChange={handleSendFolderAttachment}
+                          className="hidden"
+                        />
+                      </label>
+
+                      <button
+                        onClick={() => setShowRemoveFriendConfirm(true)}
+                        className="flex items-center gap-1 rounded-lg border border-[#383a40] bg-[#232428] px-2.5 py-1 text-xs text-neutral-400 hover:text-rose-400 transition-colors"
+                        title="Remove Friend"
+                      >
+                        <UserX className="h-3.5 w-3.5" />
+                        <span className="hidden sm:inline">Remove Friend</span>
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
 
-              {/* Group Body: Members & Sharing Hub */}
-              <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                {/* Add Friend to Group Box */}
-                <div className="rounded-2xl border border-[#383a40] bg-[#2b2d31] p-4">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-300 font-mono-code mb-2">
-                    Add Existing Friend to "{activeGroup.name}"
-                  </h3>
-                  <div className="flex gap-2">
-                    <select
-                      value={addMemberInput}
-                      onChange={e => setAddMemberInput(e.target.value)}
-                      className="flex-1 rounded-xl border border-[#383a40] bg-[#1e1f22] px-3 py-2 text-xs text-white focus:outline-none focus:border-[var(--color-accent)] font-mono-code"
-                    >
-                      <option value="">Select a friend to add...</option>
-                      {friendsList
-                        .filter(f => !activeGroup.memberUsernames.map(m => m.toLowerCase()).includes(f.toLowerCase()))
-                        .map(f => (
-                          <option key={f} value={f}>
-                            @{f}
-                          </option>
-                        ))}
-                    </select>
-                    <button
-                      onClick={() => handleAddMemberToGroup(addMemberInput)}
-                      disabled={!addMemberInput}
-                      className="rounded-xl px-4 py-2 text-xs font-bold text-white disabled:opacity-50 transition-all shadow-sm"
-                      style={{ backgroundColor: 'var(--color-accent, #5865f2)' }}
-                    >
-                      Add to Group
-                    </button>
-                  </div>
-                  <p className="mt-2 text-[11px] text-neutral-400">
-                    Subject to each friend's Group Invitation Privacy Setting.
-                  </p>
-                </div>
+              {/* Group Member Drawer (when toggled open) */}
+              {activeGroup && showMembersPanel && (
+                <div className="border-b border-[#383a40] bg-[#232428] p-4 max-h-56 overflow-y-auto animate-in slide-in-from-top-2 space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-[#383a40]">
+                    <span className="font-mono-code text-xs font-bold text-neutral-300 uppercase">
+                      Group Members ({activeGroup.memberUsernames.length})
+                    </span>
 
-                {/* Member Roster with Letter-Based Avatars */}
-                <div>
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-300 font-mono-code mb-3">
-                    Group Members ({activeGroup.memberUsernames.length})
-                  </h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {/* Add Friend to Group Quick Dropdown */}
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={addMemberInput}
+                        onChange={e => setAddMemberInput(e.target.value)}
+                        className="rounded-lg border border-[#383a40] bg-[#1e1f22] px-2.5 py-1 text-xs text-white focus:outline-none focus:border-[var(--color-accent)] font-mono-code"
+                      >
+                        <option value="">Add friend to group...</option>
+                        {friendsList
+                          .filter(f => !activeGroup.memberUsernames.map(m => m.toLowerCase()).includes(f.toLowerCase()))
+                          .map(f => (
+                            <option key={f} value={f}>
+                              @{f}
+                            </option>
+                          ))}
+                      </select>
+                      <button
+                        onClick={() => handleAddMemberToGroup(addMemberInput)}
+                        disabled={!addMemberInput}
+                        className="rounded-lg px-2.5 py-1 text-xs font-bold text-white disabled:opacity-50 transition-all shadow-sm"
+                        style={{ backgroundColor: 'var(--color-accent, #5865f2)' }}
+                      >
+                        Add
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
                     {activeGroup.memberUsernames.map(member => {
                       const isOwner = member.toLowerCase() === activeGroup.ownerUsername.toLowerCase();
                       const isMe = member.toLowerCase() === currentUser.username.toLowerCase();
@@ -836,17 +1008,19 @@ export const FriendsMessenger: React.FC = () => {
                       return (
                         <div
                           key={member}
-                          className="flex items-center justify-between p-3 rounded-xl border border-[#383a40] bg-[#2b2d31]"
+                          className="flex items-center justify-between p-2 rounded-xl border border-[#383a40] bg-[#2b2d31]"
                         >
-                          <div className="flex items-center gap-3 min-w-0">
-                            <UserAvatar username={member} size="sm" />
+                          <div className="flex items-center gap-2 min-w-0">
+                            <UserAvatar username={member} size="xs" />
                             <div className="min-w-0">
                               <p className="font-mono-code text-xs font-bold text-white truncate">
                                 @{member}
                               </p>
-                              <span className="text-[10px] text-neutral-400 font-mono-code">
-                                {isOwner ? '👑 Group Owner' : 'Group Member'}
-                              </span>
+                              {isOwner && (
+                                <span className="text-[10px] text-amber-400 font-mono-code flex items-center gap-1">
+                                  <Crown className="h-2.5 w-2.5" /> Owner
+                                </span>
+                              )}
                             </div>
                           </div>
 
@@ -856,7 +1030,7 @@ export const FriendsMessenger: React.FC = () => {
                               className="text-neutral-400 hover:text-rose-400 p-1 transition-colors"
                               title={isMe ? 'Leave Group' : 'Remove Member'}
                             >
-                              <UserMinus className="h-4 w-4" />
+                              <UserMinus className="h-3.5 w-3.5" />
                             </button>
                           )}
                         </div>
@@ -864,69 +1038,56 @@ export const FriendsMessenger: React.FC = () => {
                     })}
                   </div>
                 </div>
-              </div>
-            </div>
-          ) : activeChatFriend ? (
-            /* VIEW B: 1-ON-1 DIRECT CHAT */
-            <div className="flex-1 flex flex-col justify-between overflow-hidden">
-              {/* Chat Header */}
-              <div className="p-3.5 border-b border-[#383a40] bg-[#2b2d31] flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <UserAvatar username={activeChatFriend} size="xs" showStatus={true} status="online" />
-                  <div>
-                    <h2 className="font-mono-code text-xs font-bold text-white">
-                      @{activeChatFriend}
-                    </h2>
-                    <p className="text-[10px] text-neutral-400">
-                      Encrypted peer transfer channel
-                    </p>
-                  </div>
-                </div>
+              )}
 
-                <div className="flex items-center gap-2">
-                  <label className="flex items-center gap-1.5 rounded-lg border border-[#383a40] bg-[#313338] px-3 py-1 font-mono-code text-[11px] text-neutral-200 hover:border-neutral-500 cursor-pointer transition-colors">
-                    <Folder className="h-3 w-3" style={{ color: 'var(--color-accent)' }} />
-                    <span>Send Folder</span>
-                    {/* @ts-ignore */}
-                    <input
-                      type="file"
-                      // @ts-expect-error webkitdirectory
-                      webkitdirectory=""
-                      directory=""
-                      multiple
-                      onChange={handleSendFolderAttachment}
-                      className="hidden"
-                    />
-                  </label>
-                </div>
-              </div>
-
-              {/* Chat Messages */}
+              {/* Chat Message Stream */}
               <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4">
                 {conversationMessages.length === 0 ? (
                   <div className="flex h-full flex-col items-center justify-center text-center text-neutral-500 font-mono-code text-xs">
                     <MessageSquare className="h-8 w-8 mb-2 opacity-40 text-neutral-400" />
-                    <p>Start a transfer conversation with @{activeChatFriend}</p>
+                    <p>
+                      {activeGroup
+                        ? `Welcome to #${activeGroup.name}! Start the group conversation.`
+                        : `Start a transfer conversation with @${activeChatFriend}`}
+                    </p>
                     <p className="text-[11px] mt-1 text-neutral-400">
-                      Use the '+' attachment menu or 'Send Folder' above to send files.
+                      Share files or entire folder hierarchies using the attachment buttons below.
                     </p>
                   </div>
                 ) : (
                   conversationMessages.map(msg => {
                     const isMe = msg.senderUsername.toLowerCase() === currentUser.username.toLowerCase();
+                    const hasReactions = msg.reactions && Object.keys(msg.reactions).length > 0;
 
                     return (
                       <div
                         key={msg.id}
-                        className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
+                        className={`group/msg flex flex-col ${isMe ? 'items-end' : 'items-start'} relative`}
                       >
+                        {/* Sender info */}
                         <div className="flex items-center gap-1.5 mb-1 font-mono-code text-[10px] text-neutral-500">
                           <UserAvatar username={msg.senderUsername} size="xs" />
-                          <span>@{msg.senderUsername}</span>
+                          <span className="font-bold text-neutral-400">@{msg.senderUsername}</span>
                           <span>•</span>
                           <span>{new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                         </div>
 
+                        {/* Reply Quote Banner */}
+                        {msg.replyTo && (
+                          <div
+                            className={`mb-1 max-w-md rounded-xl px-2.5 py-1 text-[11px] font-mono-code border-l-2 flex items-center gap-1.5 ${
+                              isMe
+                                ? 'bg-indigo-950/40 border-[var(--color-accent)] text-neutral-300'
+                                : 'bg-[#232428] border-neutral-500 text-neutral-400'
+                            }`}
+                          >
+                            <Reply className="h-3 w-3 shrink-0 text-neutral-400" />
+                            <span className="font-bold">@{msg.replyTo.senderUsername}:</span>
+                            <span className="truncate italic">{msg.replyTo.text}</span>
+                          </div>
+                        )}
+
+                        {/* Message Text Bubble */}
                         {msg.text && (
                           <div
                             className={`max-w-md rounded-2xl px-4 py-2.5 text-xs font-sans leading-relaxed shadow-sm ${
@@ -940,7 +1101,7 @@ export const FriendsMessenger: React.FC = () => {
                           </div>
                         )}
 
-                        {/* Attachment Card */}
+                        {/* Folder / File Attachment Card */}
                         {msg.attachment && (
                           <div className="mt-1.5 max-w-sm rounded-2xl border border-[#383a40] bg-[#2b2d31] p-3 shadow-md">
                             <div className="flex items-center justify-between mb-2">
@@ -971,7 +1132,7 @@ export const FriendsMessenger: React.FC = () => {
                                 <button
                                   onClick={() => msg.attachment && handleDownloadAttachmentZip(msg.attachment)}
                                   disabled={isZipping === msg.attachment.title}
-                                  className="flex items-center gap-1.5 rounded-lg px-3 py-1 font-mono-code text-[10px] font-bold text-white shadow-sm"
+                                  className="flex items-center gap-1.5 rounded-lg px-3 py-1 font-mono-code text-[10px] font-bold text-white shadow-sm hover:brightness-110 active:scale-95 transition-all"
                                   style={{ backgroundColor: 'var(--color-accent, #5865f2)' }}
                                 >
                                   <FileArchive className="h-3 w-3" />
@@ -981,7 +1142,7 @@ export const FriendsMessenger: React.FC = () => {
                                 <a
                                   href={msg.attachment.files[0]?.url}
                                   download={msg.attachment.files[0]?.name || 'download'}
-                                  className="flex items-center gap-1.5 rounded-lg px-3 py-1 font-mono-code text-[10px] font-bold text-white shadow-sm"
+                                  className="flex items-center gap-1.5 rounded-lg px-3 py-1 font-mono-code text-[10px] font-bold text-white shadow-sm hover:brightness-110 active:scale-95 transition-all"
                                   style={{ backgroundColor: 'var(--color-accent, #5865f2)' }}
                                 >
                                   <Download className="h-3 w-3" />
@@ -991,6 +1152,57 @@ export const FriendsMessenger: React.FC = () => {
                             </div>
                           </div>
                         )}
+
+                        {/* Reactions Bar */}
+                        {hasReactions && (
+                          <div className="flex flex-wrap gap-1 mt-1.5">
+                            {Object.entries(msg.reactions || {}).map(([emoji, userList]) => {
+                              const hasReacted = userList.includes(currentUser.username.toLowerCase());
+                              return (
+                                <button
+                                  key={emoji}
+                                  onClick={() => toggleMessageReactionAction(msg.id, emoji)}
+                                  className={`flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-mono-code border transition-colors ${
+                                    hasReacted
+                                      ? 'bg-[var(--color-accent)]/20 border-[var(--color-accent)] text-white'
+                                      : 'bg-[#2b2d31] border-[#383a40] text-neutral-300 hover:border-neutral-400'
+                                  }`}
+                                  title={userList.join(', ')}
+                                >
+                                  <span>{emoji}</span>
+                                  <span className="text-[10px] font-bold">{userList.length}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {/* Hover Quick Actions: Emoji Reactions & Reply */}
+                        <div
+                          className={`opacity-0 group-hover/msg:opacity-100 transition-opacity absolute top-0 ${
+                            isMe ? 'left-0 -translate-x-full pr-2' : 'right-0 translate-x-full pl-2'
+                          } flex items-center gap-1 z-10`}
+                        >
+                          <div className="flex items-center gap-1 bg-[#232428] border border-[#383a40] rounded-xl p-1 shadow-lg">
+                            {['👍', '❤️', '🔥', '😂', '🎉'].map(emoji => (
+                              <button
+                                key={emoji}
+                                onClick={() => toggleMessageReactionAction(msg.id, emoji)}
+                                className="hover:scale-125 px-1 py-0.5 transition-transform text-xs"
+                                title={`React ${emoji}`}
+                              >
+                                {emoji}
+                              </button>
+                            ))}
+                            <button
+                              onClick={() => setReplyingTo(msg)}
+                              className="text-neutral-400 hover:text-white p-1 transition-colors"
+                              title="Reply"
+                            >
+                              <Reply className="h-3 w-3" />
+                            </button>
+                          </div>
+                        </div>
                       </div>
                     );
                   })
@@ -998,8 +1210,27 @@ export const FriendsMessenger: React.FC = () => {
                 <div ref={messagesEndRef} />
               </div>
 
-              {/* Chat Input Bar with '+' button */}
-              <div className="p-3 border-t border-[#383a40] bg-[#2b2d31] relative">
+              {/* Chat Input Bar */}
+              <div className="border-t border-[#383a40] bg-[#2b2d31] relative">
+                {/* Active Reply Banner */}
+                {replyingTo && (
+                  <div className="px-4 py-1.5 bg-[#232428] border-b border-[#383a40] text-[11px] font-mono-code flex items-center justify-between text-neutral-300">
+                    <span className="flex items-center gap-1.5 truncate">
+                      <Reply className="h-3 w-3 text-[var(--color-accent)]" />
+                      <span>Replying to <strong>@{replyingTo.senderUsername}</strong>:</span>
+                      <span className="italic text-neutral-400 truncate max-w-xs">{replyingTo.text || '[Attachment]'}</span>
+                    </span>
+                    <button
+                      onClick={() => setReplyingTo(null)}
+                      className="text-neutral-400 hover:text-white ml-2"
+                      title="Cancel reply"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                )}
+
+                {/* Attach File/Folder Popup Menu */}
                 {showAttachMenu && (
                   <div className="absolute right-4 bottom-14 w-60 rounded-2xl border border-[#383a40] bg-[#232428] p-2 shadow-2xl z-40 animate-in fade-in space-y-1">
                     <label className="flex items-center gap-2 p-2 rounded-xl hover:bg-[#313338] text-xs text-neutral-200 cursor-pointer transition-colors">
@@ -1024,10 +1255,15 @@ export const FriendsMessenger: React.FC = () => {
                   </div>
                 )}
 
-                <form onSubmit={handleSendMessage} className="flex items-center gap-2">
+                {/* Form Input */}
+                <form onSubmit={handleSendMessage} className="p-3 flex items-center gap-2">
                   <input
                     type="text"
-                    placeholder={`Message @${activeChatFriend}...`}
+                    placeholder={
+                      activeGroup
+                        ? `Message #${activeGroup.name}...`
+                        : `Message @${activeChatFriend}...`
+                    }
                     value={messageText}
                     onChange={e => setMessageText(e.target.value)}
                     className="flex-1 rounded-xl border border-[#383a40] bg-[#1e1f22] py-2 px-3 text-xs text-white placeholder:text-neutral-500 focus:outline-none focus:border-[var(--color-accent)]"
@@ -1059,10 +1295,40 @@ export const FriendsMessenger: React.FC = () => {
                 Select a Friend or Group
               </h3>
               <p className="mt-1 max-w-sm text-neutral-400">
-                Choose a direct message on the left, organize your friends into groups, or start sharing folders.
+                Choose a direct message on the left, create groups, or start sharing folders and files.
               </p>
             </div>
           )}
+        </div>
+      </div>
+
+      {/* CONFIRM REMOVE FRIEND MODAL */}
+      {showRemoveFriendConfirm && activeChatFriend && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-md animate-in fade-in">
+          <div className="relative w-full max-w-sm rounded-2xl border border-[#383a40] bg-[#2b2d31] p-6 shadow-2xl text-white">
+            <h3 className="text-sm font-bold text-white mb-2 font-mono-code">
+              Remove Friend
+            </h3>
+            <p className="text-xs text-neutral-300 mb-5">
+              Are you sure you want to remove <strong>@{activeChatFriend}</strong> from your friends list?
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setShowRemoveFriendConfirm(false)}
+                className="rounded-xl bg-[#383a40] px-4 py-2 text-xs font-semibold text-neutral-300 hover:bg-[#404249]"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleRemoveFriend}
+                className="rounded-xl bg-rose-600 px-4 py-2 text-xs font-bold text-white hover:bg-rose-500 shadow-sm"
+              >
+                Remove Friend
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
         </div>
       </div>
 

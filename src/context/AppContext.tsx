@@ -30,6 +30,7 @@ import { createPublishedPackage, togglePackageLike, CreatePublishedInput } from 
 import { createFriendGroup, canAddToGroup } from '../utils/groups';
 import { applyThemeToDocument, DEFAULT_THEME_ID } from '../utils/themes';
 import { apiUrl, apiFetch } from '../utils/api';
+import { initiateOAuthSignIn, checkOAuthRedirectSession } from '../utils/supabaseClient';
 
 interface AppContextType {
   // Data
@@ -87,9 +88,26 @@ interface AppContextType {
     password: string;
     bio?: string;
     location?: string;
+    dateOfBirth?: string;
+    customAvatar?: string;
   }) => Promise<{ success: boolean; error?: string }>;
   signIn: (username: string, password: string) => Promise<{ success: boolean; error?: string }>;
   signOut: () => Promise<void>;
+  signInWithOAuth: (provider: 'google' | 'discord') => Promise<{ error?: string }>;
+  oauthPendingData: {
+    requiresRegistration: boolean;
+    oauthId?: string;
+    email?: string;
+    provider?: string;
+    suggestedUsername?: string;
+    avatarUrl?: string;
+  } | null;
+  setOauthPendingData: (data: any) => void;
+  completeOAuthRegistration: (data: {
+    username: string;
+    displayName?: string;
+    dateOfBirth: string;
+  }) => Promise<{ success: boolean; error?: string }>;
   switchUserQuick: (username: string) => void;
   searchAccountsGlobally: (query: string) => Promise<User[]>;
   isRestoringSession: boolean;
@@ -115,7 +133,10 @@ interface AppContextType {
   acceptFriendRequestAction: (requestId: string) => void;
   declineFriendRequestAction: (requestId: string) => void;
   cancelFriendRequestAction: (requestId: string) => void;
+  removeFriendAction: (username: string) => Promise<{ success: boolean; error?: string }>;
   sendChatMessageAction: (recipientUsername: string, text: string, attachment?: ChatAttachment) => void;
+  sendGroupChatMessageAction: (groupId: string, text: string, attachment?: ChatAttachment, replyTo?: ChatMessage['replyTo']) => void;
+  toggleMessageReactionAction: (messageId: string, emoji: string) => Promise<void>;
 
   // Published Community Files & Vault Packages
   publishedPackages: PublishedPackage[];
@@ -265,6 +286,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [activeTransferPortalId, setActiveTransferPortalId] = useState<string | null>(null);
   const [activeChatFriend, setActiveChatFriend] = useState<string | null>('elena_k');
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
+  const [oauthPendingData, setOauthPendingData] = useState<{
+    requiresRegistration: boolean;
+    oauthId?: string;
+    email?: string;
+    provider?: string;
+    suggestedUsername?: string;
+    avatarUrl?: string;
+  } | null>(null);
 
   // Selected Theme (default: Graphite)
   const [selectedTheme, setSelectedTheme] = useState<ThemeId>(() => {
@@ -485,6 +514,48 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             if (currentUserRef.current?.username.toLowerCase() === u.username.toLowerCase()) {
               setCurrentUser(prev => (prev ? { ...prev, ...u, avatar: '' } : null));
             }
+          }
+        } catch {}
+      });
+
+      es.addEventListener('friend_removed', (e) => {
+        try {
+          const { user1, user2, users: updatedUsers } = JSON.parse(e.data);
+          if (isMounted) {
+            if (Array.isArray(updatedUsers)) {
+              setUsers(prev => {
+                const map = new Map<string, User>();
+                prev.forEach(u => map.set(u.username.toLowerCase(), u));
+                updatedUsers.forEach((u: User) => {
+                  const ex = map.get(u.username.toLowerCase());
+                  map.set(u.username.toLowerCase(), {
+                    ...ex,
+                    ...u,
+                    friends: u.friends || [],
+                  });
+                });
+                return Array.from(map.values());
+              });
+            }
+            if (currentUserRef.current) {
+              const myName = currentUserRef.current.username.toLowerCase();
+              if (myName === user1?.toLowerCase() || myName === user2?.toLowerCase()) {
+                const other = myName === user1?.toLowerCase() ? user2?.toLowerCase() : user1?.toLowerCase();
+                setCurrentUser(prev => prev ? {
+                  ...prev,
+                  friends: (prev.friends || []).filter(f => f.toLowerCase() !== other)
+                } : null);
+              }
+            }
+          }
+        } catch {}
+      });
+
+      es.addEventListener('message_reaction', (e) => {
+        try {
+          const { messageId, reactions } = JSON.parse(e.data);
+          if (isMounted) {
+            setChatMessages(prev => prev.map(m => m.id === messageId ? { ...m, reactions } : m));
           }
         } catch {}
       });
@@ -824,6 +895,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     password: string;
     bio?: string;
     location?: string;
+    dateOfBirth?: string;
+    customAvatar?: string;
   }): Promise<{ success: boolean; error?: string }> => {
     const userVal = validateUsername(data.username, users);
     if (!userVal.isValid) return { success: false, error: userVal.error };
@@ -843,6 +916,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           location: data.location?.trim() || 'Worldwide',
           selectedTheme: 'graphite',
           groupPrivacy: 'friends',
+          dateOfBirth: data.dateOfBirth,
+          customAvatar: data.customAvatar,
         }),
       });
 
@@ -878,6 +953,67 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         success: false,
         error: 'Cannot connect to Noir Archive cloud service. Please check your internet connection.',
       };
+    }
+  };
+
+  const signInWithOAuth = async (provider: 'google' | 'discord'): Promise<{ error?: string }> => {
+    try {
+      const res = await initiateOAuthSignIn(provider);
+      if (!res.success) {
+        return { error: res.error || 'Failed to start OAuth flow' };
+      }
+      return {};
+    } catch (err: any) {
+      return { error: err.message || 'OAuth error' };
+    }
+  };
+
+  const completeOAuthRegistration = async (data: {
+    username: string;
+    displayName?: string;
+    dateOfBirth: string;
+  }): Promise<{ success: boolean; error?: string }> => {
+    if (!oauthPendingData) return { success: false, error: 'No OAuth session pending' };
+    const userVal = validateUsername(data.username, users);
+    if (!userVal.isValid) return { success: false, error: userVal.error };
+
+    try {
+      const res = await apiFetch('/api/auth/oauth-complete', {
+        method: 'POST',
+        body: JSON.stringify({
+          oauthId: oauthPendingData.oauthId,
+          oauthProvider: oauthPendingData.provider,
+          username: data.username.trim().toLowerCase(),
+          displayName: data.displayName || data.username,
+          dateOfBirth: data.dateOfBirth,
+          avatarUrl: oauthPendingData.avatarUrl,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        return { success: false, error: err.error || 'Registration failed' };
+      }
+
+      const resData = await res.json();
+      if (!resData.user) return { success: false, error: 'Malformed server response' };
+
+      const authUser: User = {
+        ...resData.user,
+        avatar: '',
+        friends: resData.user.friends || [],
+        selectedTheme: 'graphite',
+        groupPrivacy: 'friends',
+      };
+
+      setUsers(prev => [...prev.filter(u => u.username.toLowerCase() !== authUser.username.toLowerCase()), authUser]);
+      setCurrentUser(authUser);
+      setOauthPendingData(null);
+      setAuthModal(null);
+      refreshSessionsAction();
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Network error' };
     }
   };
 
@@ -1066,6 +1202,38 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     restorePersistentSession();
 
+    // Check for Supabase OAuth redirects (Google & Discord)
+    checkOAuthRedirectSession().then(async (oauthUser) => {
+      if (oauthUser && oauthUser.oauthId && isMounted) {
+        try {
+          const res = await apiFetch('/api/auth/oauth-sync', {
+            method: 'POST',
+            body: JSON.stringify(oauthUser),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.authenticated && data.user) {
+              const authUser: User = {
+                ...data.user,
+                avatar: '',
+                friends: data.user.friends || [],
+                selectedTheme: data.user.selectedTheme || 'graphite',
+                groupPrivacy: data.user.groupPrivacy || 'friends',
+              };
+              setCurrentUser(authUser);
+              setUsers(prev => [...prev.filter(u => u.username.toLowerCase() !== authUser.username.toLowerCase()), authUser]);
+              refreshSessionsAction();
+            } else if (data.requiresRegistration) {
+              setOauthPendingData(data);
+              setAuthModal('signup');
+            }
+          }
+        } catch (err) {
+          console.warn('OAuth redirect sync error:', err);
+        }
+      }
+    });
+
     return () => {
       isMounted = false;
     };
@@ -1238,6 +1406,49 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setFriendRequests(prev => prev.map(r => (r.id === requestId ? { ...r, status: 'declined' } : r)));
   };
 
+  const cancelFriendRequestAction = (requestId: string) => {
+    try {
+      fetch(apiUrl(`/api/friend-requests/${encodeURIComponent(requestId)}/cancel`), { method: 'POST' }).catch(() => {});
+    } catch {}
+    setFriendRequests(prev => prev.filter(r => r.id !== requestId));
+  };
+
+  const removeFriendAction = async (targetUsername: string): Promise<{ success: boolean; error?: string }> => {
+    if (!currentUser) return { success: false, error: 'Must be signed in to remove a friend.' };
+    const cleanTarget = targetUsername.replace(/^@/, '').toLowerCase().trim();
+
+    // Optimistic local update
+    setCurrentUser(prev =>
+      prev ? { ...prev, friends: (prev.friends || []).filter(f => f.replace(/^@/, '').toLowerCase().trim() !== cleanTarget) } : null
+    );
+
+    setUsers(prev =>
+      prev.map(u => {
+        if (u.username.toLowerCase() === currentUser.username.toLowerCase()) {
+          return { ...u, friends: (u.friends || []).filter(f => f.replace(/^@/, '').toLowerCase().trim() !== cleanTarget) };
+        }
+        if (u.username.toLowerCase() === cleanTarget) {
+          return { ...u, friends: (u.friends || []).filter(f => f.replace(/^@/, '').toLowerCase().trim() !== currentUser.username.toLowerCase()) };
+        }
+        return u;
+      })
+    );
+
+    try {
+      const res = await apiFetch(`/api/friends/${encodeURIComponent(cleanTarget)}`, {
+        method: 'DELETE',
+        body: JSON.stringify({ currentUser: currentUser.username }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        return { success: false, error: err.error || 'Failed to remove friend' };
+      }
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Network error removing friend' };
+    }
+  };
+
   const sendChatMessageAction = (
     recipientUsername: string,
     text: string,
@@ -1259,6 +1470,61 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           attachment,
         }),
       }).catch(() => {});
+    } catch {}
+  };
+
+  const sendGroupChatMessageAction = (
+    groupId: string,
+    text: string,
+    attachment?: ChatAttachment,
+    replyTo?: ChatMessage['replyTo']
+  ) => {
+    if (!currentUser) return;
+    const msg = createChatMessage(currentUser.username, '', text, attachment, groupId, replyTo);
+    setChatMessages(prev => [...prev.filter(m => m.id !== msg.id), msg]);
+
+    try {
+      fetch(apiUrl('/api/chat-messages'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: msg.id,
+          senderUsername: currentUser.username,
+          groupId,
+          text,
+          attachment,
+          replyTo,
+        }),
+      }).catch(() => {});
+    } catch {}
+  };
+
+  const toggleMessageReactionAction = async (messageId: string, emoji: string) => {
+    if (!currentUser) return;
+    const username = currentUser.username.toLowerCase();
+
+    // Optimistic reaction toggle
+    setChatMessages(prev =>
+      prev.map(m => {
+        if (m.id !== messageId) return m;
+        const reactions = { ...(m.reactions || {}) };
+        const userList: string[] = Array.isArray(reactions[emoji]) ? reactions[emoji] : [];
+        if (userList.includes(username)) {
+          reactions[emoji] = userList.filter(u => u !== username);
+          if (reactions[emoji].length === 0) delete reactions[emoji];
+        } else {
+          reactions[emoji] = [...userList, username];
+        }
+        return { ...m, reactions };
+      })
+    );
+
+    try {
+      await fetch(apiUrl(`/api/chat-messages/${encodeURIComponent(messageId)}/react`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emoji, username }),
+      });
     } catch {}
   };
 
@@ -1573,6 +1839,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         signUp,
         signIn,
         signOut,
+        signInWithOAuth,
+        oauthPendingData,
+        setOauthPendingData,
+        completeOAuthRegistration,
         switchUserQuick,
         searchAccountsGlobally,
         isRestoringSession,
@@ -1594,7 +1864,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         acceptFriendRequestAction,
         declineFriendRequestAction,
         cancelFriendRequestAction,
+        removeFriendAction,
         sendChatMessageAction,
+        sendGroupChatMessageAction,
+        toggleMessageReactionAction,
         publishedPackages,
         publishPackageAction,
         editPublishedPackageAction,

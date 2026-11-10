@@ -104,9 +104,20 @@ CREATE TABLE IF NOT EXISTS public.friend_groups (
 
 CREATE INDEX IF NOT EXISTS idx_friend_groups_owner ON public.friend_groups (LOWER(owner_username));
 
--- User settings columns
+-- User settings and profile columns (Idempotent)
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS selected_theme TEXT DEFAULT 'graphite';
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS group_privacy TEXT DEFAULT 'friends';
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS custom_avatar TEXT;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS date_of_birth DATE;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS oauth_id TEXT;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS oauth_provider TEXT;
+
+-- Chat messages group, replies, and reactions columns (Idempotent)
+ALTER TABLE public.chat_messages ADD COLUMN IF NOT EXISTS group_id TEXT;
+ALTER TABLE public.chat_messages ADD COLUMN IF NOT EXISTS reply_to JSONB;
+ALTER TABLE public.chat_messages ADD COLUMN IF NOT EXISTS reactions JSONB DEFAULT '{}'::JSONB;
+
+CREATE INDEX IF NOT EXISTS idx_chat_messages_group ON public.chat_messages (group_id, created_at ASC);
 
 -- ========================================================================
 -- 2. ROW LEVEL SECURITY (RLS) & ACCESS CONTROL
@@ -152,7 +163,7 @@ CREATE POLICY "Service role full access on published_packages" ON public.publish
 
 -- 2.2 Direct Client Access Restrictions
 -- Completely revoke direct SELECT/INSERT/UPDATE/DELETE on private tables from anon and authenticated clients.
--- password_hash and private user data are thereby completely inaccessible via direct client table queries.
+-- password_hash, private date_of_birth, and private user data are thereby completely inaccessible via direct client table queries.
 REVOKE ALL ON TABLE public.users FROM anon, authenticated;
 REVOKE ALL ON TABLE public.friend_requests FROM anon, authenticated;
 REVOKE ALL ON TABLE public.chat_messages FROM anon, authenticated;
@@ -188,6 +199,7 @@ GRANT SELECT ON TABLE public.transfers TO anon, authenticated;
 -- dependent database objects. Use DROP VIEW IF EXISTS ... RESTRICT or CREATE OR REPLACE VIEW.
 -- This view exposes ONLY non-sensitive profile fields:
 -- Excluded: password_hash (credential privacy)
+-- Excluded: date_of_birth (private age verification data never leaked)
 -- Excluded: friends (friend relationships remain private)
 
 DROP VIEW IF EXISTS public.public_users RESTRICT;
@@ -199,6 +211,7 @@ SELECT
   username,
   bio,
   avatar,
+  custom_avatar,
   location,
   created_at
 FROM public.users;

@@ -34,6 +34,9 @@ import {
   updateSupabasePublishedLike,
   incrementSupabasePublishedDownload,
   syncLocalStorageToSupabase,
+  removeSupabaseFriendship,
+  updateSupabaseChatMessageReactions,
+  getSupabaseUserByOAuth,
   SUPABASE_PROJECT_REF,
   DEFAULT_SUPABASE_URL,
   UserDTO,
@@ -138,6 +141,10 @@ export interface User {
   settings?: any;
   favoritePackageIds?: string[];
   activeSessions?: any[];
+  dateOfBirth?: string;
+  isAdult?: boolean;
+  oauthId?: string;
+  oauthProvider?: string;
 }
 
 export interface FriendGroup {
@@ -173,6 +180,19 @@ interface StoreData {
   files?: StoredFileRecord[];
 }
 
+export function calculateAge(dobString?: string): number {
+  if (!dobString) return 0;
+  const dob = new Date(dobString);
+  if (isNaN(dob.getTime())) return 0;
+  const today = new Date();
+  let age = today.getFullYear() - dob.getFullYear();
+  const m = today.getMonth() - dob.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) {
+    age--;
+  }
+  return Math.max(0, age);
+}
+
 const DEFAULT_USERS: User[] = [
   {
     id: 'user-moritz',
@@ -186,6 +206,8 @@ const DEFAULT_USERS: User[] = [
     friends: ['elena_k', 'kenji_mono'],
     selectedTheme: 'graphite',
     groupPrivacy: 'friends',
+    dateOfBirth: '1998-05-12',
+    isAdult: true,
     settings: {
       matureContentFilter: 'warn',
       publicVisibility: 'everyone',
@@ -212,6 +234,8 @@ const DEFAULT_USERS: User[] = [
     friends: ['moritz'],
     selectedTheme: 'graphite',
     groupPrivacy: 'friends',
+    dateOfBirth: '1999-11-20',
+    isAdult: true,
     settings: {
       matureContentFilter: 'warn',
       publicVisibility: 'everyone',
@@ -234,6 +258,8 @@ const DEFAULT_USERS: User[] = [
     friends: ['moritz'],
     selectedTheme: 'graphite',
     groupPrivacy: 'friends',
+    dateOfBirth: '1996-03-15',
+    isAdult: true,
     settings: {
       matureContentFilter: 'warn',
       publicVisibility: 'everyone',
@@ -256,6 +282,8 @@ const DEFAULT_USERS: User[] = [
     friends: [],
     selectedTheme: 'graphite',
     groupPrivacy: 'friends',
+    dateOfBirth: '1995-01-10',
+    isAdult: true,
     settings: {
       matureContentFilter: 'warn',
       publicVisibility: 'everyone',
@@ -277,6 +305,8 @@ function loadStore(): StoreData {
       DEFAULT_USERS.forEach(u => userMap.set(u.username.toLowerCase(), u));
       (data.users || []).forEach((u: User) => {
         const def = userMap.get(u.username.toLowerCase());
+        const dob = u.dateOfBirth || def?.dateOfBirth;
+        const isAdult = dob ? calculateAge(dob) >= 18 : true;
         userMap.set(u.username.toLowerCase(), {
           ...def,
           ...u,
@@ -285,6 +315,10 @@ function loadStore(): StoreData {
           displayName: u.displayName || def?.displayName || u.username,
           selectedTheme: u.selectedTheme || def?.selectedTheme || 'graphite',
           groupPrivacy: u.groupPrivacy || def?.groupPrivacy || 'friends',
+          dateOfBirth: dob,
+          isAdult,
+          oauthId: u.oauthId || def?.oauthId || undefined,
+          oauthProvider: u.oauthProvider || def?.oauthProvider || undefined,
           settings: { ...(def?.settings || {}), ...(u.settings || {}) },
           favoritePackageIds: Array.isArray(u.favoritePackageIds) ? u.favoritePackageIds : (def?.favoritePackageIds || []),
           activeSessions: Array.isArray(u.activeSessions) ? u.activeSessions : (def?.activeSessions || []),
@@ -299,7 +333,6 @@ function loadStore(): StoreData {
   } catch (err) {
     console.error('Error reading store file:', err);
   }
-
 
   const initialStore: StoreData = {
     users: [...DEFAULT_USERS],
@@ -325,9 +358,14 @@ function saveStore(data: StoreData) {
 // In-memory store initialized from disk as resilient baseline
 let store = loadStore();
 
-function sanitizeUser(user: User | UserDTO) {
-  const { passwordHash, ...safe } = user;
-  return safe;
+function sanitizeUser(user: User | UserDTO, isSelf = false) {
+  const { passwordHash, dateOfBirth, ...safe } = user as any;
+  const isAdult = dateOfBirth ? calculateAge(dateOfBirth) >= 18 : true;
+  return {
+    ...safe,
+    isAdult,
+    ...(isSelf && dateOfBirth ? { dateOfBirth } : {}),
+  };
 }
 
 function parseCookies(cookieHeader?: string): Record<string, string> {
@@ -391,6 +429,16 @@ function clearSessionCookie(res: express.Response, req: express.Request) {
     sameSite: isHttps ? 'none' : 'lax',
     path: '/',
   });
+}
+
+function getCurrentSessionUser(req: express.Request): User | null {
+  const token = getSessionToken(req);
+  if (!token) return null;
+  const session = (store.sessions || []).find(s => s.token === token);
+  if (!session) return null;
+  if (new Date(session.expiresAt) <= new Date()) return null;
+  const user = store.users.find(u => u.username.toLowerCase() === session.username.toLowerCase());
+  return user || null;
 }
 
 async function startServer() {
@@ -781,6 +829,15 @@ async function startServer() {
     });
   });
 
+  // Client-safe Auth & Supabase configuration
+  app.get('/api/config/auth', (_req, res) => {
+    res.json({
+      supabaseUrl: process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || DEFAULT_SUPABASE_URL,
+      supabaseAnonKey: process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.dummy',
+      projectRef: SUPABASE_PROJECT_REF,
+    });
+  });
+
   // Diagnostics and Health Check (reporting Supabase connection status)
   app.get('/api/health', async (_req, res) => {
     const currentStatus = isSupabaseConfigured() ? await testSupabaseConnection() : { connected: false, message: 'SUPABASE_SERVICE_ROLE_KEY not set' };
@@ -979,7 +1036,7 @@ async function startServer() {
 
   // User Sign Up
   app.post('/api/auth/signup', async (req, res) => {
-    const { username, password, bio, location, selectedTheme, groupPrivacy } = req.body;
+    const { username, password, bio, location, selectedTheme, groupPrivacy, dateOfBirth, customAvatar } = req.body;
     if (!username || !password) {
       return res.status(400).json({ error: 'Username and password are required' });
     }
@@ -987,6 +1044,16 @@ async function startServer() {
     const cleanUsername = username.replace(/^@/, '').trim().toLowerCase();
     if (cleanUsername.length < 3) {
       return res.status(400).json({ error: 'Username must be at least 3 characters' });
+    }
+
+    // Validate Date of Birth if provided
+    let isAdult = true;
+    if (dateOfBirth) {
+      const age = calculateAge(dateOfBirth);
+      if (age < 0 || age > 130) {
+        return res.status(400).json({ error: 'Please enter a valid Date of Birth' });
+      }
+      isAdult = age >= 18;
     }
 
     if (isSupabaseConfigured()) {
@@ -1006,12 +1073,16 @@ async function startServer() {
       username: cleanUsername,
       bio: bio?.trim() || 'Noir Archive file sharing member.',
       avatar: '', // Strict letter-based avatars: no human photos
+      customAvatar: customAvatar || undefined,
       location: location?.trim() || 'Worldwide',
       passwordHash: hashPassword(password),
       createdAt: new Date().toISOString(),
       friends: [],
       selectedTheme: selectedTheme || 'graphite',
       groupPrivacy: groupPrivacy || 'friends',
+      dateOfBirth: dateOfBirth || undefined,
+      isAdult,
+      oauthProvider: 'email',
     };
 
     if (isSupabaseConfigured()) {
@@ -1056,7 +1127,172 @@ async function startServer() {
     broadcast('user_registered', sanitizeUser(newUser));
     res.json({
       success: true,
-      user: sanitizeUser(newUser),
+      user: sanitizeUser(newUser, true),
+      session: {
+        id: newSession.id,
+        expiresAt: newSession.expiresAt,
+      },
+      sessionToken,
+    });
+  });
+
+  // OAuth Session Sync (Returning OAuth user or initiate handle/DOB setup)
+  app.post('/api/auth/oauth-sync', async (req, res) => {
+    const { oauthId, email, provider, fullName, avatarUrl } = req.body;
+    if (!oauthId) {
+      return res.status(400).json({ error: 'OAuth ID is required' });
+    }
+
+    let existingUser: User | UserDTO | null = null;
+    if (isSupabaseConfigured()) {
+      existingUser = await getSupabaseUserByOAuth(oauthId);
+    }
+    if (!existingUser) {
+      existingUser = store.users.find(u => u.oauthId === oauthId) || null;
+    }
+
+    // If already registered and linked, automatically establish persistent session!
+    if (existingUser) {
+      const sessionToken = crypto.randomBytes(32).toString('hex');
+      const newSession: AuthSession = {
+        id: `sess_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`,
+        token: sessionToken,
+        userId: existingUser.id,
+        username: existingUser.username,
+        createdAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        lastActive: new Date().toISOString(),
+        client: parseClientUserAgent(req.headers['user-agent']),
+        ip: (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket.remoteAddress || '127.0.0.1',
+      };
+
+      store.sessions = store.sessions || [];
+      store.sessions.push(newSession);
+      saveStore(store);
+
+      setSessionCookie(res, req, sessionToken);
+      return res.json({
+        authenticated: true,
+        user: sanitizeUser(existingUser, true),
+        session: {
+          id: newSession.id,
+          expiresAt: newSession.expiresAt,
+        },
+        sessionToken,
+      });
+    }
+
+    // First time OAuth user: return requiresRegistration so they can select a unique username & Date of Birth
+    const suggestedUsername = (
+      email ? email.split('@')[0] : fullName ? fullName.replace(/\s+/g, '_') : 'user'
+    ).toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 20);
+
+    return res.json({
+      authenticated: false,
+      requiresRegistration: true,
+      oauthId,
+      email: email || '',
+      provider: provider || 'oauth',
+      suggestedUsername,
+      avatarUrl: avatarUrl || '',
+    });
+  });
+
+  // OAuth Registration Completion (first-time OAuth user setting unique username & Date of Birth)
+  app.post('/api/auth/oauth-complete', async (req, res) => {
+    const { oauthId, oauthProvider, username, displayName, dateOfBirth, avatarUrl, bio } = req.body;
+    if (!oauthId || !username) {
+      return res.status(400).json({ error: 'OAuth ID and username are required' });
+    }
+
+    const cleanUsername = username.replace(/^@/, '').trim().toLowerCase();
+    if (cleanUsername.length < 3) {
+      return res.status(400).json({ error: 'Username must be at least 3 characters' });
+    }
+
+    // Age calculation
+    let isAdult = true;
+    if (dateOfBirth) {
+      const age = calculateAge(dateOfBirth);
+      if (age < 0 || age > 130) {
+        return res.status(400).json({ error: 'Please enter a valid Date of Birth' });
+      }
+      isAdult = age >= 18;
+    }
+
+    if (isSupabaseConfigured()) {
+      const existingInDb = await getSupabaseUserByUsername(cleanUsername);
+      if (existingInDb) {
+        return res.status(400).json({ error: `The username "${cleanUsername}" is already taken` });
+      }
+    }
+
+    const existingLocal = store.users.find(u => u.username.toLowerCase() === cleanUsername);
+    if (existingLocal) {
+      return res.status(400).json({ error: `The username "${cleanUsername}" is already taken` });
+    }
+
+    const newUser: User = {
+      id: `user-${Date.now()}`,
+      username: cleanUsername,
+      displayName: displayName || cleanUsername,
+      bio: bio?.trim() || 'Noir Archive file sharing member.',
+      avatar: '',
+      customAvatar: avatarUrl || undefined,
+      location: 'Worldwide',
+      passwordHash: hashPassword(crypto.randomBytes(16).toString('hex')),
+      createdAt: new Date().toISOString(),
+      friends: [],
+      selectedTheme: 'graphite',
+      groupPrivacy: 'friends',
+      dateOfBirth: dateOfBirth || undefined,
+      isAdult,
+      oauthId,
+      oauthProvider: oauthProvider || 'oauth',
+    };
+
+    if (isSupabaseConfigured()) {
+      try {
+        await createSupabaseUser(newUser);
+      } catch (err: any) {
+        console.error('[Supabase OAuth User Create Error]:', err.message);
+      }
+    }
+
+    const sessionToken = crypto.randomBytes(32).toString('hex');
+    const newSession: AuthSession = {
+      id: `sess_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`,
+      token: sessionToken,
+      userId: newUser.id,
+      username: newUser.username,
+      createdAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      lastActive: new Date().toISOString(),
+      client: parseClientUserAgent(req.headers['user-agent']),
+      ip: (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket.remoteAddress || '127.0.0.1',
+    };
+
+    store.sessions = store.sessions || [];
+    store.sessions.push(newSession);
+
+    newUser.activeSessions = [
+      {
+        id: newSession.id,
+        client: newSession.client || 'Web Browser',
+        ip: newSession.ip || '127.0.0.1',
+        lastActive: 'Just now',
+        current: true,
+      },
+    ];
+
+    store.users.push(newUser);
+    saveStore(store);
+
+    setSessionCookie(res, req, sessionToken);
+    broadcast('user_registered', sanitizeUser(newUser));
+    res.json({
+      success: true,
+      user: sanitizeUser(newUser, true),
       session: {
         id: newSession.id,
         expiresAt: newSession.expiresAt,
@@ -1452,6 +1688,40 @@ async function startServer() {
     res.json({ success: true });
   });
 
+  // Friend Removal - Bidirectional
+  const handleFriendRemoval = async (req: express.Request, res: express.Response) => {
+    const targetUsername = (req.params.username || req.body.username || req.body.targetUsername || '').replace(/^@/, '').toLowerCase().trim();
+    const sessionUser = getCurrentSessionUser(req);
+    const currentUsername = (req.body.currentUser || req.body.currentUsername || sessionUser?.username || '').replace(/^@/, '').toLowerCase().trim();
+
+    if (!targetUsername || !currentUsername) {
+      return res.status(400).json({ error: 'Current user and target user to remove are required' });
+    }
+
+    const u1 = store.users.find(u => u.username.toLowerCase() === currentUsername);
+    const u2 = store.users.find(u => u.username.toLowerCase() === targetUsername);
+
+    if (u1) {
+      u1.friends = (u1.friends || []).filter(f => f.replace(/^@/, '').toLowerCase().trim() !== targetUsername);
+    }
+    if (u2) {
+      u2.friends = (u2.friends || []).filter(f => f.replace(/^@/, '').toLowerCase().trim() !== currentUsername);
+    }
+
+    if (isSupabaseConfigured()) {
+      await removeSupabaseFriendship(currentUsername, targetUsername).catch(() => {});
+      if (u1) await updateSupabaseUserFriends(u1.username, u1.friends).catch(() => {});
+      if (u2) await updateSupabaseUserFriends(u2.username, u2.friends).catch(() => {});
+    }
+
+    saveStore(store);
+    broadcast('friend_removed', { user1: currentUsername, user2: targetUsername, users: store.users.map(u => sanitizeUser(u, false)) });
+    res.json({ success: true, message: `Removed @${targetUsername} from friends`, users: store.users.map(u => sanitizeUser(u, false)) });
+  };
+
+  app.delete('/api/friends/:username', handleFriendRemoval);
+  app.post('/api/friends/remove', handleFriendRemoval);
+
   // --- FRIEND GROUPS ---
   // Get groups for a user
   app.get('/api/groups', async (req, res) => {
@@ -1533,9 +1803,22 @@ async function startServer() {
     res.json({ success: true, group });
   });
 
-  // Delete Group
+  // Delete Group (with Group Owner verification)
   app.delete('/api/groups/:id', async (req, res) => {
     const { id } = req.params;
+    const group = (store.groups || []).find(g => g.id === id);
+    if (!group) {
+      return res.status(404).json({ error: 'Group not found' });
+    }
+
+    const sessionUser = getCurrentSessionUser(req);
+    const requestedBy = (req.body?.requesterUsername || req.query?.user || sessionUser?.username || '').toString().replace(/^@/, '').toLowerCase().trim();
+    if (sessionUser && group.ownerUsername.toLowerCase() !== sessionUser.username.toLowerCase()) {
+      return res.status(403).json({ error: 'Only the group owner can delete this group' });
+    } else if (!sessionUser && requestedBy && group.ownerUsername.toLowerCase() !== requestedBy) {
+      return res.status(403).json({ error: 'Only the group owner can delete this group' });
+    }
+
     store.groups = (store.groups || []).filter(g => g.id !== id);
 
     if (isSupabaseConfigured()) {
@@ -1625,9 +1908,21 @@ async function startServer() {
     res.json({ success: true, group });
   });
 
-  // Chat Messages - Get
+  // Chat Messages - Get (supports 1-on-1 and Group chats)
   app.get('/api/chat-messages', async (req, res) => {
-    const { user1, user2 } = req.query as { user1?: string; user2?: string };
+    const { user1, user2, groupId } = req.query as { user1?: string; user2?: string; groupId?: string };
+
+    if (groupId) {
+      if (isSupabaseConfigured()) {
+        const messages = await getSupabaseChatMessages(undefined, undefined, groupId);
+        if (messages.length > 0) {
+          return res.json(messages);
+        }
+      }
+      const groupMsgs = store.chatMessages.filter(m => m.groupId === groupId);
+      return res.json(groupMsgs);
+    }
+
     if (isSupabaseConfigured()) {
       const messages = await getSupabaseChatMessages(user1, user2);
       if (messages.length > 0 || (user1 && user2)) {
@@ -1648,15 +1943,15 @@ async function startServer() {
     res.json(store.chatMessages);
   });
 
-  // Chat Messages - Send
+  // Chat Messages - Send (with group, replies, and reactions support)
   app.post('/api/chat-messages', async (req, res) => {
-    const { id, senderUsername, recipientUsername, text, attachment } = req.body;
-    if (!senderUsername || !recipientUsername || (!text?.trim() && !attachment)) {
+    const { id, senderUsername, recipientUsername, groupId, text, attachment, replyTo } = req.body;
+    if (!senderUsername || (!recipientUsername && !groupId) || (!text?.trim() && !attachment)) {
       return res.status(400).json({ error: 'Invalid message parameters' });
     }
 
     const cleanSender = senderUsername.replace(/^@/, '').toLowerCase().trim();
-    const cleanRecipient = recipientUsername.replace(/^@/, '').toLowerCase().trim();
+    const cleanRecipient = recipientUsername ? recipientUsername.replace(/^@/, '').toLowerCase().trim() : '';
 
     const msgId = id || `msg-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     const existing = store.chatMessages.find(m => m.id === msgId);
@@ -1668,8 +1963,11 @@ async function startServer() {
       id: msgId,
       senderUsername: cleanSender,
       recipientUsername: cleanRecipient,
+      groupId: groupId || undefined,
       text: text?.trim() || '',
-      attachment,
+      attachment: attachment || undefined,
+      replyTo: replyTo || undefined,
+      reactions: {},
       createdAt: new Date().toISOString(),
     };
 
@@ -1682,6 +1980,40 @@ async function startServer() {
 
     broadcast('new_message', newMessage);
     res.json({ success: true, message: newMessage });
+  });
+
+  // Chat Messages - Emoji Reaction Toggle
+  app.post('/api/chat-messages/:id/react', async (req, res) => {
+    const { id } = req.params;
+    const { emoji, username } = req.body;
+    if (!emoji || !username) {
+      return res.status(400).json({ error: 'Emoji and username are required' });
+    }
+
+    const cleanUser = username.replace(/^@/, '').toLowerCase().trim();
+    const message = store.chatMessages.find(m => m.id === id);
+    if (!message) {
+      return res.status(404).json({ error: 'Message not found' });
+    }
+
+    message.reactions = message.reactions || {};
+    const currentReactions: string[] = Array.isArray(message.reactions[emoji]) ? message.reactions[emoji] : [];
+    if (currentReactions.includes(cleanUser)) {
+      message.reactions[emoji] = currentReactions.filter(u => u !== cleanUser);
+      if (message.reactions[emoji].length === 0) {
+        delete message.reactions[emoji];
+      }
+    } else {
+      message.reactions[emoji] = [...currentReactions, cleanUser];
+    }
+
+    if (isSupabaseConfigured()) {
+      await updateSupabaseChatMessageReactions(id, message.reactions).catch(() => {});
+    }
+
+    saveStore(store);
+    broadcast('message_reaction', { messageId: id, reactions: message.reactions, emoji, username: cleanUser });
+    res.json({ success: true, messageId: id, reactions: message.reactions });
   });
 
   // Transfers - Get All
@@ -1810,15 +2142,34 @@ async function startServer() {
     res.json({ success: true, review: newRev });
   });
 
-  // Published Packages - Get All
-  app.get('/api/published', async (_req, res) => {
+  // Published Packages - Get All (with age restriction enforcement)
+  app.get('/api/published', async (req, res) => {
+    let allPublished: any[] = [];
     if (isSupabaseConfigured()) {
       const dbPublished = await getSupabasePublished();
       if (dbPublished.length > 0) {
-        return res.json(dbPublished);
+        allPublished = dbPublished;
       }
     }
-    res.json(store.publishedPackages);
+    if (allPublished.length === 0) {
+      allPublished = store.publishedPackages || [];
+    }
+
+    const sessionUser = getCurrentSessionUser(req);
+    const queryUsername = ((req.query.user as string) || '').replace(/^@/, '').toLowerCase().trim();
+    let isRequesterAdult = sessionUser?.isAdult;
+    if (isRequesterAdult === undefined && queryUsername) {
+      const u = store.users.find(user => user.username.toLowerCase() === queryUsername);
+      if (u) isRequesterAdult = u.isAdult;
+    }
+
+    // If requester is verified adult, return full vault; if minor or unverified guest, exclude 18+ mature content
+    if (isRequesterAdult) {
+      return res.json(allPublished);
+    }
+
+    const safePublished = allPublished.filter(p => !p.isMature);
+    res.json(safePublished);
   });
 
   // Published Packages - Create
@@ -1843,7 +2194,7 @@ async function startServer() {
     res.json({ success: true, package: pkg });
   });
 
-  // Published Packages - Edit / Update
+  // Published Packages - Edit / Update (with author verification)
   app.put('/api/published/:id', async (req, res) => {
     const { id } = req.params;
     const updates = req.body;
@@ -1854,6 +2205,15 @@ async function startServer() {
     }
 
     const current = store.publishedPackages[idx];
+    const sessionUser = getCurrentSessionUser(req);
+    const requestedBy = (req.body?.authorUsername || req.query?.user || sessionUser?.username || '').toString().replace(/^@/, '').toLowerCase().trim();
+
+    if (sessionUser && current.authorUsername?.toLowerCase() !== sessionUser.username.toLowerCase()) {
+      return res.status(403).json({ error: 'You are not authorized to modify this publication' });
+    } else if (!sessionUser && requestedBy && current.authorUsername?.toLowerCase() !== requestedBy) {
+      return res.status(403).json({ error: 'You are not authorized to modify this publication' });
+    }
+
     const updated = {
       ...current,
       ...updates,
@@ -1872,12 +2232,21 @@ async function startServer() {
     res.json({ success: true, package: updated });
   });
 
-  // Published Packages - Delete
+  // Published Packages - Delete (with author verification)
   app.delete('/api/published/:id', async (req, res) => {
     const { id } = req.params;
     const pkg = store.publishedPackages.find(p => p.id === id);
     if (!pkg) {
       return res.status(404).json({ error: 'Published package not found' });
+    }
+
+    const sessionUser = getCurrentSessionUser(req);
+    const requestedBy = (req.body?.authorUsername || req.query?.user || sessionUser?.username || '').toString().replace(/^@/, '').toLowerCase().trim();
+
+    if (sessionUser && pkg.authorUsername?.toLowerCase() !== sessionUser.username.toLowerCase()) {
+      return res.status(403).json({ error: 'You are not authorized to delete this publication' });
+    } else if (!sessionUser && requestedBy && pkg.authorUsername?.toLowerCase() !== requestedBy) {
+      return res.status(403).json({ error: 'You are not authorized to delete this publication' });
     }
 
     store.publishedPackages = store.publishedPackages.filter(p => p.id !== id);

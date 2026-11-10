@@ -46,30 +46,53 @@ export function getSupabaseClient(): SupabaseClient | null {
   return client;
 }
 
+function calculateAge(dobString?: string): number {
+  if (!dobString) return 0;
+  const dob = new Date(dobString);
+  if (isNaN(dob.getTime())) return 0;
+  const today = new Date();
+  let age = today.getFullYear() - dob.getFullYear();
+  const m = today.getMonth() - dob.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) {
+    age--;
+  }
+  return Math.max(0, age);
+}
+
 // Database Entities mapping
 export interface DbUser {
   id: string;
   username: string;
   bio?: string;
   avatar: string;
+  custom_avatar?: string;
   location?: string;
   password_hash: string;
   friends: string[];
   created_at: string;
   updated_at?: string;
+  date_of_birth?: string;
+  oauth_id?: string;
+  oauth_provider?: string;
 }
 
 export interface UserDTO {
   id: string;
   username: string;
+  displayName?: string;
   bio?: string;
   avatar: string;
+  customAvatar?: string;
   location?: string;
   passwordHash: string;
   createdAt: string;
   friends: string[];
   selectedTheme?: string;
   groupPrivacy?: 'everyone' | 'friends' | 'nobody';
+  dateOfBirth?: string;
+  isAdult?: boolean;
+  oauthId?: string;
+  oauthProvider?: string;
 }
 
 export interface FriendGroupDTO {
@@ -95,21 +118,32 @@ export interface ChatMessageDTO {
   recipientUsername: string;
   text: string;
   attachment?: any;
+  groupId?: string;
+  replyTo?: { id: string; senderUsername: string; text: string };
+  reactions?: Record<string, string[]>;
   createdAt: string;
 }
 
 function mapUserFromDb(row: any): UserDTO {
+  const customAvatar = row.custom_avatar || (row.avatar && !row.avatar.includes('unsplash.com') ? row.avatar : undefined);
+  const dob = row.date_of_birth || undefined;
   return {
     id: row.id,
     username: row.username,
+    displayName: row.display_name || row.username,
     bio: row.bio || '',
     avatar: row.avatar || '',
+    customAvatar,
     location: row.location || '',
     passwordHash: row.password_hash || '',
     createdAt: row.created_at || new Date().toISOString(),
     friends: Array.isArray(row.friends) ? row.friends : [],
     selectedTheme: row.selected_theme || 'graphite',
     groupPrivacy: (row.group_privacy as any) || 'friends',
+    dateOfBirth: dob,
+    isAdult: dob ? calculateAge(dob) >= 18 : true,
+    oauthId: row.oauth_id || undefined,
+    oauthProvider: row.oauth_provider || undefined,
   };
 }
 
@@ -124,12 +158,16 @@ function mapFriendRequestFromDb(row: any): FriendRequestDTO {
 }
 
 function mapChatMessageFromDb(row: any): ChatMessageDTO {
+  const groupId = row.group_id || (row.recipient_username?.startsWith('group:') ? row.recipient_username.replace('group:', '') : undefined);
   return {
     id: row.id,
     senderUsername: row.sender_username,
     recipientUsername: row.recipient_username,
     text: row.text || '',
     attachment: row.attachment || undefined,
+    groupId,
+    replyTo: row.reply_to || undefined,
+    reactions: row.reactions || {},
     createdAt: row.created_at,
   };
 }
@@ -197,19 +235,38 @@ export async function searchSupabaseUsers(query: string): Promise<UserDTO[]> {
   return (data || []).map(mapUserFromDb);
 }
 
+export async function getSupabaseUserByOAuth(oauthId: string): Promise<UserDTO | null> {
+  if (!client) return null;
+  const { data, error } = await client
+    .from('users')
+    .select('*')
+    .eq('oauth_id', oauthId)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return mapUserFromDb(data);
+}
+
 export async function createSupabaseUser(user: UserDTO): Promise<UserDTO> {
   if (!client) return user;
-  const dbPayload = {
+  const dbPayload: any = {
     id: user.id,
     username: user.username.toLowerCase().trim(),
     bio: user.bio || '',
-    avatar: user.avatar,
+    avatar: user.avatar || '',
     location: user.location || '',
     password_hash: user.passwordHash,
     friends: user.friends || [],
     created_at: user.createdAt,
     updated_at: new Date().toISOString(),
   };
+
+  if (user.customAvatar) dbPayload.custom_avatar = user.customAvatar;
+  if (user.dateOfBirth) dbPayload.date_of_birth = user.dateOfBirth;
+  if (user.oauthId) dbPayload.oauth_id = user.oauthId;
+  if (user.oauthProvider) dbPayload.oauth_provider = user.oauthProvider;
+  if (user.selectedTheme) dbPayload.selected_theme = user.selectedTheme;
+  if (user.groupPrivacy) dbPayload.group_privacy = user.groupPrivacy;
 
   const { data, error } = await client
     .from('users')
@@ -229,7 +286,7 @@ export async function updateSupabaseUserAvatar(username: string, avatar: string)
   const clean = username.toLowerCase().trim();
   const { data, error } = await client
     .from('users')
-    .update({ avatar, updated_at: new Date().toISOString() })
+    .update({ avatar, custom_avatar: avatar, updated_at: new Date().toISOString() })
     .ilike('username', clean)
     .select('*')
     .single();
@@ -254,6 +311,26 @@ export async function updateSupabaseUserFriends(username: string, friends: strin
   }
 }
 
+export async function removeSupabaseFriendship(user1: string, user2: string): Promise<void> {
+  if (!client) return;
+  const u1 = user1.toLowerCase().trim();
+  const u2 = user2.toLowerCase().trim();
+  try {
+    const user1Data = await getSupabaseUserByUsername(u1);
+    if (user1Data) {
+      const nextFriends = user1Data.friends.filter(f => f.toLowerCase().trim() !== u2);
+      await updateSupabaseUserFriends(u1, nextFriends);
+    }
+    const user2Data = await getSupabaseUserByUsername(u2);
+    if (user2Data) {
+      const nextFriends = user2Data.friends.filter(f => f.toLowerCase().trim() !== u1);
+      await updateSupabaseUserFriends(u2, nextFriends);
+    }
+  } catch (err) {
+    console.warn('[Supabase] Error removing friendship:', err);
+  }
+}
+
 export async function updateSupabaseUserSettings(
   username: string,
   settings: {
@@ -263,6 +340,7 @@ export async function updateSupabaseUserSettings(
     location?: string;
     displayName?: string;
     customAvatar?: string | null;
+    dateOfBirth?: string;
     settings?: any;
     favoritePackageIds?: string[];
   }
@@ -274,6 +352,11 @@ export async function updateSupabaseUserSettings(
   if (settings.groupPrivacy) updatePayload.group_privacy = settings.groupPrivacy;
   if (settings.bio !== undefined) updatePayload.bio = settings.bio;
   if (settings.location !== undefined) updatePayload.location = settings.location;
+  if (settings.customAvatar !== undefined) {
+    updatePayload.custom_avatar = settings.customAvatar || null;
+    updatePayload.avatar = settings.customAvatar || '';
+  }
+  if (settings.dateOfBirth !== undefined) updatePayload.date_of_birth = settings.dateOfBirth;
 
   const { data, error } = await client
     .from('users')
@@ -453,11 +536,14 @@ export async function deleteSupabaseFriendRequest(id: string): Promise<void> {
 }
 
 // Chat Messages
-export async function getSupabaseChatMessages(user1?: string, user2?: string): Promise<ChatMessageDTO[]> {
+export async function getSupabaseChatMessages(user1?: string, user2?: string, groupId?: string): Promise<ChatMessageDTO[]> {
   if (!client) return [];
   let query = client.from('chat_messages').select('*').order('created_at', { ascending: true });
 
-  if (user1 && user2) {
+  if (groupId) {
+    const cleanGroup = groupId.replace(/^group:/, '').trim();
+    query = query.or(`group_id.eq.${cleanGroup},recipient_username.eq.group:${cleanGroup}`);
+  } else if (user1 && user2) {
     const u1 = user1.replace(/^@/, '').toLowerCase().trim();
     const u2 = user2.replace(/^@/, '').toLowerCase().trim();
     query = query.or(
@@ -475,14 +561,18 @@ export async function getSupabaseChatMessages(user1?: string, user2?: string): P
 
 export async function createSupabaseChatMessage(msg: ChatMessageDTO): Promise<ChatMessageDTO> {
   if (!client) return msg;
-  const payload = {
+  const payload: any = {
     id: msg.id,
     sender_username: msg.senderUsername.toLowerCase().trim(),
     recipient_username: msg.recipientUsername.toLowerCase().trim(),
-    text: msg.text,
+    text: msg.text || '',
     attachment: msg.attachment || null,
     created_at: msg.createdAt,
   };
+
+  if (msg.groupId) payload.group_id = msg.groupId;
+  if (msg.replyTo) payload.reply_to = msg.replyTo;
+  if (msg.reactions) payload.reactions = msg.reactions;
 
   const { data, error } = await client
     .from('chat_messages')
@@ -495,6 +585,24 @@ export async function createSupabaseChatMessage(msg: ChatMessageDTO): Promise<Ch
     throw new Error(error.message);
   }
   return mapChatMessageFromDb(data);
+}
+
+export async function updateSupabaseChatMessageReactions(
+  messageId: string,
+  reactions: Record<string, string[]>
+): Promise<void> {
+  if (!client) return;
+  try {
+    const { error } = await client
+      .from('chat_messages')
+      .update({ reactions })
+      .eq('id', messageId);
+    if (error) {
+      console.warn('[Supabase] Error updating message reactions:', error.message);
+    }
+  } catch (err) {
+    console.warn('[Supabase] Error updating reactions:', err);
+  }
 }
 
 // Transfers

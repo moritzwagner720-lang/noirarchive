@@ -90,3 +90,63 @@ export function hashPassword(password: string): string {
 export function verifyPassword(password: string, storedHash: string): boolean {
   return hashPassword(password) === storedHash;
 }
+
+/**
+ * Calculates accurate age from a birth date string (YYYY-MM-DD).
+ */
+export function calculateAge(dobString: string): number {
+  if (!dobString) return 0;
+  const dob = new Date(dobString);
+  if (isNaN(dob.getTime())) return 0;
+  const today = new Date();
+  let age = today.getFullYear() - dob.getFullYear();
+  const m = today.getMonth() - dob.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) {
+    age--;
+  }
+  return Math.max(0, age);
+}
+
+/**
+ * Validates date of birth string:
+ * - Must be a valid date
+ * - Must be in the past
+ * - Must be reasonably bounded (< 120 years ago)
+ */
+export function validateDateOfBirth(dobString: string): {
+  isValid: boolean;
+  error?: string;
+  age?: number;
+  isAdult?: boolean;
+} {
+  if (!dobString || !dobString.trim()) {
+    return { isValid: false, error: 'Date of birth is required for content safety & verification.' };
+  }
+
+  const clean = dobString.trim();
+  const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+  if (!dateRegex.test(clean)) {
+    return { isValid: false, error: 'Please enter date of birth in YYYY-MM-DD format.' };
+  }
+
+  const date = new Date(clean);
+  if (isNaN(date.getTime())) {
+    return { isValid: false, error: 'Invalid date of birth entered.' };
+  }
+
+  const today = new Date();
+  if (date > today) {
+    return { isValid: false, error: 'Date of birth cannot be in the future.' };
+  }
+
+  const age = calculateAge(clean);
+  if (age > 120) {
+    return { isValid: false, error: 'Please enter a realistic date of birth.' };
+  }
+
+  return {
+    isValid: true,
+    age,
+    isAdult: age >= 18,
+  };
+}

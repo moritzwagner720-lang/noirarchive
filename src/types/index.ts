@@ -128,6 +128,10 @@ export interface User {
   settings?: UserSettings;
   favoritePackageIds?: string[];
   activeSessions?: ActiveSession[];
+  dateOfBirth?: string; // YYYY-MM-DD format (private, never exposed to other users)
+  isAdult?: boolean; // Derived server-side (age >= 18)
+  oauthId?: string; // Supabase OAuth subject ID
+  oauthProvider?: 'google' | 'discord' | 'email';
 }
 
 export interface TransferFile {
@@ -207,12 +211,21 @@ export interface ChatAttachment {
   totalSize: string;
 }
 
+export interface ChatMessageReply {
+  id: string;
+  senderUsername: string;
+  text: string;
+}
+
 export interface ChatMessage {
   id: string;
   senderUsername: string;
   recipientUsername: string;
   text: string;
   attachment?: ChatAttachment;
+  groupId?: string;
+  replyTo?: ChatMessageReply;
+  reactions?: Record<string, string[]>; // emoji -> array of usernames
   createdAt: string;
 }
 
