@@ -14,6 +14,7 @@ import {
   updateSupabaseUserAvatar,
   updateSupabaseUserFriends,
   updateSupabaseUserSettings,
+  updateSupabaseUserPassword,
   getSupabaseGroups,
   createSupabaseGroup,
   updateSupabaseGroup,
@@ -32,8 +33,18 @@ import {
   addSupabaseTransferReview,
   getSupabasePublished,
   upsertSupabasePublished,
+  deleteSupabasePublished,
   updateSupabasePublishedLike,
   incrementSupabasePublishedDownload,
+  getSupabaseSessionByToken,
+  getSupabaseSessionsByUsername,
+  createSupabaseSession,
+  touchSupabaseSession,
+  deleteSupabaseSessionByToken,
+  deleteSupabaseSessionById,
+  deleteAllSupabaseSessionsForUser,
+  createSupabaseReport,
+  getSupabaseReports,
   syncLocalStorageToSupabase,
   removeSupabaseFriendship,
   updateSupabaseChatMessageReactions,
@@ -454,10 +465,18 @@ async function startServer() {
       console.log(`[Noir Archive] Supabase connected to project: ${SUPABASE_PROJECT_REF}`);
       // Preserve existing data without overwriting
       await syncLocalStorageToSupabase(store);
-      // Refresh local cache with live Supabase users
+      // Refresh local cache with live Supabase users, published packages, and reports
       const liveUsers = await getSupabaseUsers();
       if (liveUsers.length > 0) {
         store.users = liveUsers;
+      }
+      const livePublished = await getSupabasePublished();
+      if (livePublished.length > 0) {
+        store.publishedPackages = livePublished;
+      }
+      const liveReports = await getSupabaseReports();
+      if (liveReports.length > 0) {
+        store.reports = liveReports;
       }
     } else {
       console.warn(`[Noir Archive] Supabase connection check warning: ${supabaseStatus.message}`);
@@ -1103,7 +1122,14 @@ async function startServer() {
       return res.status(400).json({ error: 'New password must be at least 6 characters' });
     }
 
-    const idx = store.users.findIndex(u => u.username.toLowerCase() === username);
+    let idx = store.users.findIndex(u => u.username.toLowerCase() === username);
+    if (idx < 0 && isSupabaseConfigured()) {
+      const dbUser = await getSupabaseUserByUsername(username);
+      if (dbUser) {
+        store.users.push(dbUser as User);
+        idx = store.users.length - 1;
+      }
+    }
     if (idx < 0) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -1113,7 +1139,13 @@ async function startServer() {
       return res.status(401).json({ error: 'Current password is incorrect' });
     }
 
-    user.passwordHash = hashPassword(newPassword);
+    const newHash = hashPassword(newPassword);
+    user.passwordHash = newHash;
+
+    if (isSupabaseConfigured()) {
+      await updateSupabaseUserPassword(username, newHash);
+    }
+
     saveStore(store);
 
     res.json({ success: true, message: 'Password updated successfully' });
@@ -1195,6 +1227,9 @@ async function startServer() {
 
     store.sessions = store.sessions || [];
     store.sessions.push(newSession);
+    if (isSupabaseConfigured()) {
+      await createSupabaseSession(newSession);
+    }
 
     newUser.activeSessions = [
       {
@@ -1360,6 +1395,9 @@ async function startServer() {
 
     store.sessions = store.sessions || [];
     store.sessions.push(newSession);
+    if (isSupabaseConfigured()) {
+      await createSupabaseSession(newSession);
+    }
 
     newUser.activeSessions = [
       {
@@ -1424,6 +1462,9 @@ async function startServer() {
 
     store.sessions = store.sessions || [];
     store.sessions.push(newSession);
+    if (isSupabaseConfigured()) {
+      await createSupabaseSession(newSession);
+    }
 
     const userObj = store.users.find(u => u.username.toLowerCase() === cleanUsername);
     if (userObj) {
@@ -1460,7 +1501,14 @@ async function startServer() {
     }
 
     store.sessions = store.sessions || [];
-    const session = store.sessions.find(s => s.token === token);
+    let session = store.sessions.find(s => s.token === token);
+    if (!session && isSupabaseConfigured()) {
+      const dbSession = await getSupabaseSessionByToken(token);
+      if (dbSession) {
+        session = dbSession;
+        store.sessions.push(dbSession);
+      }
+    }
     if (!session) {
       clearSessionCookie(res, req);
       return res.json({ authenticated: false, message: 'Invalid or revoked session' });
@@ -1468,6 +1516,9 @@ async function startServer() {
 
     if (new Date(session.expiresAt) <= new Date()) {
       store.sessions = store.sessions.filter(s => s.token !== token);
+      if (isSupabaseConfigured()) {
+        await deleteSupabaseSessionByToken(token);
+      }
       clearSessionCookie(res, req);
       saveStore(store);
       return res.json({ authenticated: false, message: 'Session expired' });
@@ -1475,6 +1526,9 @@ async function startServer() {
 
     // Refresh last active timestamp
     session.lastActive = new Date().toISOString();
+    if (isSupabaseConfigured()) {
+      await touchSupabaseSession(token, session.lastActive);
+    }
 
     let user: User | UserDTO | null = null;
     if (isSupabaseConfigured()) {
@@ -1486,6 +1540,9 @@ async function startServer() {
 
     if (!user) {
       store.sessions = store.sessions.filter(s => s.token !== token);
+      if (isSupabaseConfigured()) {
+        await deleteSupabaseSessionByToken(token);
+      }
       clearSessionCookie(res, req);
       saveStore(store);
       return res.json({ authenticated: false, message: 'User account not found' });
@@ -1509,10 +1566,13 @@ async function startServer() {
   });
 
   // Sign Out current session
-  app.post('/api/auth/signout', (req, res) => {
+  app.post('/api/auth/signout', async (req, res) => {
     const token = getSessionToken(req);
     if (token) {
       store.sessions = (store.sessions || []).filter(s => s.token !== token);
+      if (isSupabaseConfigured()) {
+        await deleteSupabaseSessionByToken(token);
+      }
       saveStore(store);
     }
     clearSessionCookie(res, req);
@@ -1520,13 +1580,19 @@ async function startServer() {
   });
 
   // Sign Out of all sessions (Option to log out of all sessions)
-  app.post('/api/auth/signout-all', (req, res) => {
+  app.post('/api/auth/signout-all', async (req, res) => {
     const token = getSessionToken(req);
     if (token) {
-      const session = (store.sessions || []).find(s => s.token === token);
+      let session = (store.sessions || []).find(s => s.token === token);
+      if (!session && isSupabaseConfigured()) {
+        session = (await getSupabaseSessionByToken(token)) || undefined;
+      }
       if (session) {
-        store.sessions = (store.sessions || []).filter(s => s.username.toLowerCase() !== session.username.toLowerCase());
-        const userObj = store.users.find(u => u.username.toLowerCase() === session.username.toLowerCase());
+        store.sessions = (store.sessions || []).filter(s => s.username.toLowerCase() !== session!.username.toLowerCase());
+        if (isSupabaseConfigured()) {
+          await deleteAllSupabaseSessionsForUser(session.username);
+        }
+        const userObj = store.users.find(u => u.username.toLowerCase() === session!.username.toLowerCase());
         if (userObj) {
           userObj.activeSessions = [];
         }
@@ -1538,45 +1604,74 @@ async function startServer() {
   });
 
   // Get active sessions for current user
-  app.get('/api/auth/sessions', (req, res) => {
+  app.get('/api/auth/sessions', async (req, res) => {
     const token = getSessionToken(req);
     if (!token) {
       return res.status(401).json({ error: 'Authentication required' });
     }
-    const currentSession = (store.sessions || []).find(s => s.token === token);
+    let currentSession = (store.sessions || []).find(s => s.token === token);
+    if (!currentSession && isSupabaseConfigured()) {
+      const dbSession = await getSupabaseSessionByToken(token);
+      if (dbSession) {
+        currentSession = dbSession;
+        store.sessions.push(dbSession);
+      }
+    }
     if (!currentSession) {
       return res.status(401).json({ error: 'Invalid session' });
     }
 
-    const userSessions = (store.sessions || [])
-      .filter(s => s.username.toLowerCase() === currentSession.username.toLowerCase())
-      .map(s => ({
-        id: s.id,
-        client: s.client || 'Web Browser',
-        ip: s.ip || '127.0.0.1',
-        lastActive: s.token === token ? 'Just now (This Browser)' : s.lastActive,
-        createdAt: s.createdAt,
-        current: s.token === token,
-      }));
+    let rawSessions = (store.sessions || []).filter(
+      s => s.username.toLowerCase() === currentSession!.username.toLowerCase()
+    );
+    if (isSupabaseConfigured()) {
+      const dbSessions = await getSupabaseSessionsByUsername(currentSession.username);
+      if (dbSessions.length > 0) {
+        rawSessions = dbSessions;
+      }
+    }
+
+    const userSessions = rawSessions.map(s => ({
+      id: s.id,
+      client: s.client || 'Web Browser',
+      ip: s.ip || '127.0.0.1',
+      lastActive: s.token === token ? 'Just now (This Browser)' : s.lastActive,
+      createdAt: s.createdAt,
+      current: s.token === token,
+    }));
 
     res.json({ success: true, sessions: userSessions });
   });
 
   // Revoke specific session by ID
-  app.delete('/api/auth/sessions/:sessionId', (req, res) => {
+  app.delete('/api/auth/sessions/:sessionId', async (req, res) => {
     const token = getSessionToken(req);
     if (!token) {
       return res.status(401).json({ error: 'Authentication required' });
     }
-    const currentSession = (store.sessions || []).find(s => s.token === token);
+    let currentSession = (store.sessions || []).find(s => s.token === token);
+    if (!currentSession && isSupabaseConfigured()) {
+      const dbSession = await getSupabaseSessionByToken(token);
+      if (dbSession) {
+        currentSession = dbSession;
+        store.sessions.push(dbSession);
+      }
+    }
     if (!currentSession) {
       return res.status(401).json({ error: 'Invalid session' });
     }
 
     const { sessionId } = req.params;
-    const target = (store.sessions || []).find(s => s.id === sessionId);
+    let target = (store.sessions || []).find(s => s.id === sessionId);
+    if (!target && isSupabaseConfigured()) {
+      const dbSessions = await getSupabaseSessionsByUsername(currentSession.username);
+      target = dbSessions.find(s => s.id === sessionId);
+    }
     if (target && target.username.toLowerCase() === currentSession.username.toLowerCase()) {
-      store.sessions = store.sessions.filter(s => s.id !== sessionId);
+      store.sessions = (store.sessions || []).filter(s => s.id !== sessionId);
+      if (isSupabaseConfigured()) {
+        await deleteSupabaseSessionById(sessionId, currentSession.username);
+      }
       if (target.token === token) {
         clearSessionCookie(res, req);
       }
@@ -2407,13 +2502,11 @@ async function startServer() {
   // Published Packages - Get All (with age restriction enforcement)
   app.get('/api/published', async (req, res) => {
     let allPublished: any[] = [];
-    if (isSupabaseConfigured()) {
+    if (isSupabaseConfigured() && supabaseStatus.connected) {
       const dbPublished = await getSupabasePublished();
-      if (dbPublished.length > 0) {
-        allPublished = dbPublished;
-      }
-    }
-    if (allPublished.length === 0 && store.publishedPackages) {
+      allPublished = dbPublished;
+      store.publishedPackages = dbPublished;
+    } else if (store.publishedPackages) {
       allPublished = store.publishedPackages;
     }
     if (allPublished.length === 0 && !isSupabaseConfigured()) {
@@ -2522,7 +2615,15 @@ async function startServer() {
     const { id } = req.params;
     const updates = req.body;
 
-    const idx = store.publishedPackages.findIndex(p => p.id === id);
+    let idx = store.publishedPackages.findIndex(p => p.id === id);
+    if (idx < 0 && isSupabaseConfigured()) {
+      const all = await getSupabasePublished();
+      const found = all.find((p: any) => p.id === id);
+      if (found) {
+        store.publishedPackages.push(found);
+        idx = store.publishedPackages.length - 1;
+      }
+    }
     if (idx < 0) {
       return res.status(404).json({ error: 'Published package not found' });
     }
@@ -2558,7 +2659,11 @@ async function startServer() {
   // Published Packages - Delete (with author verification)
   app.delete('/api/published/:id', async (req, res) => {
     const { id } = req.params;
-    const pkg = store.publishedPackages.find(p => p.id === id);
+    let pkg = store.publishedPackages.find(p => p.id === id);
+    if (!pkg && isSupabaseConfigured()) {
+      const all = await getSupabasePublished();
+      pkg = all.find((p: any) => p.id === id);
+    }
     if (!pkg) {
       return res.status(404).json({ error: 'Published package not found' });
     }
@@ -2570,6 +2675,13 @@ async function startServer() {
       return res.status(403).json({ error: 'You are not authorized to delete this publication' });
     } else if (!sessionUser && requestedBy && pkg.authorUsername?.toLowerCase() !== requestedBy) {
       return res.status(403).json({ error: 'You are not authorized to delete this publication' });
+    }
+
+    if (isSupabaseConfigured()) {
+      const deleted = await deleteSupabasePublished(id);
+      if (!deleted) {
+        return res.status(500).json({ error: 'Failed to delete publication from database' });
+      }
     }
 
     store.publishedPackages = store.publishedPackages.filter(p => p.id !== id);
@@ -2584,7 +2696,12 @@ async function startServer() {
     const { id } = req.params;
     const { reason, details, reportedBy } = req.body;
 
-    const pkg = store.publishedPackages.find(p => p.id === id);
+    let pkg = store.publishedPackages.find(p => p.id === id);
+    if (!pkg && isSupabaseConfigured()) {
+      const all = await getSupabasePublished();
+      pkg = all.find((p: any) => p.id === id);
+      if (pkg) store.publishedPackages.push(pkg);
+    }
     if (!pkg) {
       return res.status(404).json({ error: 'Published package not found' });
     }
@@ -2606,6 +2723,12 @@ async function startServer() {
       createdAt: new Date().toISOString(),
     };
     store.reports.push(newReport);
+
+    if (isSupabaseConfigured()) {
+      await createSupabaseReport(newReport);
+      await upsertSupabasePublished(pkg);
+    }
+
     saveStore(store);
 
     broadcast('published_reported', { id, reportsCount: pkg.reportsCount });

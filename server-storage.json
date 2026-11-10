@@ -5,34 +5,26 @@
       "username": "moritz",
       "displayName": "moritz",
       "bio": "Architectural and minimalist street photography. Exploring geometric tension, concrete textures, and natural contrast.",
-      "avatar": "",
+      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
       "location": "Berlin",
       "passwordHash": "hash_53ab39b7_11",
       "createdAt": "2024-01-15T10:00:00+00:00",
       "friends": [
         "elena_k",
-        "kenji_mono",
-        "daddy12"
+        "kenji_mono"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
-      "isAdult": true,
-      "activeSessions": [
-        {
-          "id": "sess_1794320819098_d221b2fa",
-          "client": "Chrome",
-          "ip": "127.0.0.1",
-          "lastActive": "Just now",
-          "current": true
-        }
-      ]
+      "settings": {},
+      "favoritePackageIds": [],
+      "isAdult": true
     },
     {
       "id": "user-elena",
       "username": "elena_k",
       "displayName": "elena_k",
       "bio": "Monochrome portraiture, sculptural fashion, and darkroom chiaroscuro.",
-      "avatar": "",
+      "avatar": "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=400&q=80",
       "location": "Paris",
       "passwordHash": "hash_2c1542db_9",
       "createdAt": "2024-02-01T12:00:00+00:00",
@@ -41,6 +33,8 @@
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -48,7 +42,7 @@
       "username": "kenji_mono",
       "displayName": "kenji_mono",
       "bio": "Nocturnal street observer. Capturing midnight rain, subway shadows, and solitary moments across Tokyo.",
-      "avatar": "",
+      "avatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80",
       "location": "Tokyo",
       "passwordHash": "hash_49b28bb5_7",
       "createdAt": "2024-03-10T09:30:00+00:00",
@@ -57,6 +51,8 @@
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -64,13 +60,15 @@
       "username": "daddy",
       "displayName": "daddy",
       "bio": "Visual artist and photographer.",
-      "avatar": "",
+      "avatar": "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=400&q=80",
       "location": "Berlin",
       "passwordHash": "hash_53ab39b7_11",
       "createdAt": "2024-04-01T09:30:00+00:00",
       "friends": [],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -78,13 +76,15 @@
       "username": "nigger123",
       "displayName": "nigger123",
       "bio": "Visual photographer & darkroom artist.",
-      "avatar": "",
+      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
       "location": "Worldwide",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_4eebef6a_9",
       "createdAt": "2026-11-08T18:35:38.35+00:00",
       "friends": [],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -92,15 +92,17 @@
       "username": "browser_usr_329900",
       "displayName": "browser_usr_329900",
       "bio": "Photographer accessing via Chrome browser on macOS.",
-      "avatar": "",
+      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
       "location": "Berlin Web",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_7f888263_19",
       "createdAt": "2026-11-09T15:32:10.874+00:00",
       "friends": [
         "win_desk_329900"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -108,15 +110,17 @@
       "username": "win_desk_329900",
       "displayName": "win_desk_329900",
       "bio": "Photographer accessing via Windows Electron desktop app.",
-      "avatar": "",
+      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
       "location": "Tokyo Desktop",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_7f888263_19",
       "createdAt": "2026-11-09T15:32:11.236+00:00",
       "friends": [
         "browser_usr_329900"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -124,15 +128,17 @@
       "username": "browser_usr_340308",
       "displayName": "browser_usr_340308",
       "bio": "Photographer accessing via Chrome browser on macOS.",
-      "avatar": "",
+      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
       "location": "Berlin Web",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_7f888263_19",
       "createdAt": "2026-11-09T15:32:21.025+00:00",
       "friends": [
         "win_desk_340308"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -140,15 +146,17 @@
       "username": "win_desk_340308",
       "displayName": "win_desk_340308",
       "bio": "Photographer accessing via Windows Electron desktop app.",
-      "avatar": "",
+      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
       "location": "Tokyo Desktop",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_7f888263_19",
       "createdAt": "2026-11-09T15:32:21.282+00:00",
       "friends": [
         "browser_usr_340308"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -156,9 +164,10 @@
       "username": "ahmadddd",
       "displayName": "ahmadddd",
       "bio": "Visual artist and photographer.",
-      "avatar": "",
+      "avatar": "data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20128%20128%22%20width%3D%22128%22%20height%3D%22128%22%3E%0A%20%20%20%20%3Cdefs%3E%0A%20%20%20%20%20%20%20%20%3ClinearGradient%20id%3D%22grad%22%20x1%3D%220%25%22%20y1%3D%220%25%22%20x2%3D%22100%25%22%20y2%3D%22100%25%22%3E%0A%20%20%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22%23ef4444%22%20%2F%3E%0A%20%20%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22%23b91c1c%22%20%2F%3E%0A%20%20%20%20%20%20%20%20%3C%2FlinearGradient%3E%0A%20%20%20%20%20%20%3C%2Fdefs%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%22128%22%20height%3D%22128%22%20rx%3D%2264%22%20fill%3D%22url(%23grad)%22%20%2F%3E%0A%20%20%20%20%3Ctext%20x%3D%2250%25%22%20y%3D%2254%25%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%20fill%3D%22%23ffffff%22%20font-family%3D%22-apple-system%2C%20BlinkMacSystemFont%2C%20'Segoe%20UI'%2C%20Roboto%2C%20Helvetica%2C%20Arial%2C%20sans-serif%22%20font-weight%3D%22800%22%20font-size%3D%2262%22%20letter-spacing%3D%22-1%22%3EA%3C%2Ftext%3E%0A%20%20%3C%2Fsvg%3E",
+      "customAvatar": "data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20128%20128%22%20width%3D%22128%22%20height%3D%22128%22%3E%0A%20%20%20%20%3Cdefs%3E%0A%20%20%20%20%20%20%20%20%3ClinearGradient%20id%3D%22grad%22%20x1%3D%220%25%22%20y1%3D%220%25%22%20x2%3D%22100%25%22%20y2%3D%22100%25%22%3E%0A%20%20%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22%23ef4444%22%20%2F%3E%0A%20%20%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22%23b91c1c%22%20%2F%3E%0A%20%20%20%20%20%20%20%20%3C%2FlinearGradient%3E%0A%20%20%20%20%20%20%3C%2Fdefs%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%22128%22%20height%3D%22128%22%20rx%3D%2264%22%20fill%3D%22url(%23grad)%22%20%2F%3E%0A%20%20%20%20%3Ctext%20x%3D%2250%25%22%20y%3D%2254%25%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%20fill%3D%22%23ffffff%22%20font-family%3D%22-apple-system%2C%20BlinkMacSystemFont%2C%20'Segoe%20UI'%2C%20Roboto%2C%20Helvetica%2C%20Arial%2C%20sans-serif%22%20font-weight%3D%22800%22%20font-size%3D%2262%22%20letter-spacing%3D%22-1%22%3EA%3C%2Ftext%3E%0A%20%20%3C%2Fsvg%3E",
       "location": "Worldwide",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_669fd085_8",
       "createdAt": "2026-11-09T15:42:20.146+00:00",
       "friends": [
         "thomas",
@@ -166,6 +175,8 @@
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -173,15 +184,17 @@
       "username": "thomas",
       "displayName": "thomas",
       "bio": "Visual artist and photographer.",
-      "avatar": "",
+      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
       "location": "Worldwide",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_6f4defcb_9",
       "createdAt": "2026-11-09T16:07:28.9+00:00",
       "friends": [
         "ahmadddd"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -189,15 +202,17 @@
       "username": "browser_usr_631434",
       "displayName": "browser_usr_631434",
       "bio": "Photographer accessing via Chrome browser on macOS.",
-      "avatar": "",
+      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
       "location": "Berlin Web",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_7f888263_19",
       "createdAt": "2026-11-09T16:27:11.765+00:00",
       "friends": [
         "win_desk_631434"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -205,15 +220,17 @@
       "username": "win_desk_631434",
       "displayName": "win_desk_631434",
       "bio": "Photographer accessing via Windows Electron desktop app.",
-      "avatar": "",
+      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
       "location": "Tokyo Desktop",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_7f888263_19",
       "createdAt": "2026-11-09T16:27:12.092+00:00",
       "friends": [
         "browser_usr_631434"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -221,18 +238,19 @@
       "username": "daddy12",
       "displayName": "daddy12",
       "bio": "Visual artist and photographer.",
-      "avatar": "",
+      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
       "location": "Worldwide",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_5d9ebb62_9",
       "createdAt": "2026-11-09T16:28:23.242+00:00",
       "friends": [
         "ahmadddd",
         "k3nandaddy",
-        "cihyasamen",
-        "moritz"
+        "cihyasamen"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -240,15 +258,17 @@
       "username": "browser_usr_132049",
       "displayName": "browser_usr_132049",
       "bio": "Photographer accessing via Chrome browser on macOS.",
-      "avatar": "",
+      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
       "location": "Berlin Web",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_7f888263_19",
       "createdAt": "2026-11-09T16:35:32.497+00:00",
       "friends": [
         "win_desk_132049"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -256,15 +276,17 @@
       "username": "win_desk_132049",
       "displayName": "win_desk_132049",
       "bio": "Photographer accessing via Windows Electron desktop app.",
-      "avatar": "",
+      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
       "location": "Tokyo Desktop",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_7f888263_19",
       "createdAt": "2026-11-09T16:35:32.728+00:00",
       "friends": [
         "browser_usr_132049"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -272,15 +294,17 @@
       "username": "win_usr_132691",
       "displayName": "win_usr_132691",
       "bio": "Registered via Windows desktop app.",
-      "avatar": "",
+      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
       "location": "Berlin Desktop",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_4c6d1fd0_18",
       "createdAt": "2026-11-09T16:35:32.861+00:00",
       "friends": [
         "web_usr_132691"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -288,13 +312,15 @@
       "username": "web_usr_132691",
       "displayName": "web_usr_132691",
       "bio": "Registered via web browser.",
-      "avatar": "",
+      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
       "location": "Paris Web",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_4c6d1fd0_18",
       "createdAt": "2026-11-09T16:35:33.058+00:00",
       "friends": [],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -302,15 +328,17 @@
       "username": "win_usr_181968",
       "displayName": "win_usr_181968",
       "bio": "Registered via Windows desktop app.",
-      "avatar": "",
+      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
       "location": "Berlin Desktop",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_4c6d1fd0_18",
       "createdAt": "2026-11-09T16:36:22.099+00:00",
       "friends": [
         "web_usr_181968"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -318,15 +346,17 @@
       "username": "web_usr_181968",
       "displayName": "web_usr_181968",
       "bio": "Registered via web browser.",
-      "avatar": "",
+      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
       "location": "Paris Web",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_4c6d1fd0_18",
       "createdAt": "2026-11-09T16:36:22.308+00:00",
       "friends": [
         "win_usr_181968"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -334,15 +364,17 @@
       "username": "win_usr_205700",
       "displayName": "win_usr_205700",
       "bio": "Registered via Windows desktop app.",
-      "avatar": "",
+      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
       "location": "Berlin Desktop",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_4c6d1fd0_18",
       "createdAt": "2026-11-09T16:36:45.935+00:00",
       "friends": [
         "web_usr_205700"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -350,15 +382,17 @@
       "username": "web_usr_205700",
       "displayName": "web_usr_205700",
       "bio": "Registered via web browser.",
-      "avatar": "",
+      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
       "location": "Paris Web",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_4c6d1fd0_18",
       "createdAt": "2026-11-09T16:36:46.258+00:00",
       "friends": [
         "win_usr_205700"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -366,15 +400,17 @@
       "username": "win_usr_225864",
       "displayName": "win_usr_225864",
       "bio": "Registered via Windows desktop app.",
-      "avatar": "",
+      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
       "location": "Berlin Desktop",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_4c6d1fd0_18",
       "createdAt": "2026-11-09T16:37:05.964+00:00",
       "friends": [
         "web_usr_225864"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -382,15 +418,17 @@
       "username": "web_usr_225864",
       "displayName": "web_usr_225864",
       "bio": "Registered via web browser.",
-      "avatar": "",
+      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
       "location": "Paris Web",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_4c6d1fd0_18",
       "createdAt": "2026-11-09T16:37:06.22+00:00",
       "friends": [
         "win_usr_225864"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -398,15 +436,17 @@
       "username": "browser_usr_232906",
       "displayName": "browser_usr_232906",
       "bio": "Photographer accessing via Chrome browser on macOS.",
-      "avatar": "",
+      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
       "location": "Berlin Web",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_7f888263_19",
       "createdAt": "2026-11-09T16:37:13.36+00:00",
       "friends": [
         "win_desk_232906"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -414,15 +454,17 @@
       "username": "win_usr_233447",
       "displayName": "win_usr_233447",
       "bio": "Registered via Windows desktop app.",
-      "avatar": "",
+      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
       "location": "Berlin Desktop",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_4c6d1fd0_18",
       "createdAt": "2026-11-09T16:37:13.576+00:00",
       "friends": [
         "web_usr_233447"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -430,15 +472,17 @@
       "username": "win_desk_232906",
       "displayName": "win_desk_232906",
       "bio": "Photographer accessing via Windows Electron desktop app.",
-      "avatar": "",
+      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
       "location": "Tokyo Desktop",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_7f888263_19",
       "createdAt": "2026-11-09T16:37:13.6+00:00",
       "friends": [
         "browser_usr_232906"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -446,15 +490,17 @@
       "username": "web_usr_233447",
       "displayName": "web_usr_233447",
       "bio": "Registered via web browser.",
-      "avatar": "",
+      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
       "location": "Paris Web",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_4c6d1fd0_18",
       "createdAt": "2026-11-09T16:37:13.801+00:00",
       "friends": [
         "win_usr_233447"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -462,15 +508,17 @@
       "username": "browser_usr_917015",
       "displayName": "browser_usr_917015",
       "bio": "Photographer accessing via Chrome browser on macOS.",
-      "avatar": "",
+      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
       "location": "Berlin Web",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_7f888263_19",
       "createdAt": "2026-11-09T16:48:37.778+00:00",
       "friends": [
         "win_desk_917015"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -478,15 +526,17 @@
       "username": "win_desk_917015",
       "displayName": "win_desk_917015",
       "bio": "Photographer accessing via Windows Electron desktop app.",
-      "avatar": "",
+      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
       "location": "Tokyo Desktop",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_7f888263_19",
       "createdAt": "2026-11-09T16:48:38.133+00:00",
       "friends": [
         "browser_usr_917015"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -494,15 +544,17 @@
       "username": "browser_usr_795594",
       "displayName": "browser_usr_795594",
       "bio": "Photographer accessing via Chrome browser on macOS.",
-      "avatar": "",
+      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
       "location": "Berlin Web",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_7f888263_19",
       "createdAt": "2026-11-09T18:26:35.931+00:00",
       "friends": [
         "win_desk_795594"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -510,15 +562,17 @@
       "username": "win_desk_795594",
       "displayName": "win_desk_795594",
       "bio": "Photographer accessing via Windows Electron desktop app.",
-      "avatar": "",
+      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
       "location": "Tokyo Desktop",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_7f888263_19",
       "createdAt": "2026-11-09T18:26:36.232+00:00",
       "friends": [
         "browser_usr_795594"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -526,15 +580,17 @@
       "username": "browser_usr_756139",
       "displayName": "browser_usr_756139",
       "bio": "Photographer accessing via Chrome browser on macOS.",
-      "avatar": "",
+      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
       "location": "Berlin Web",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_7f888263_19",
       "createdAt": "2026-11-09T18:42:36.607+00:00",
       "friends": [
         "win_desk_756139"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -542,15 +598,17 @@
       "username": "win_desk_756139",
       "displayName": "win_desk_756139",
       "bio": "Photographer accessing via Windows Electron desktop app.",
-      "avatar": "",
+      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
       "location": "Tokyo Desktop",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_7f888263_19",
       "createdAt": "2026-11-09T18:42:36.918+00:00",
       "friends": [
         "browser_usr_756139"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -558,15 +616,17 @@
       "username": "browser_usr_769959",
       "displayName": "browser_usr_769959",
       "bio": "Photographer accessing via Chrome browser on macOS.",
-      "avatar": "",
+      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
       "location": "Berlin Web",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_7f888263_19",
       "createdAt": "2026-11-09T18:42:50.507+00:00",
       "friends": [
         "win_desk_769959"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -574,15 +634,17 @@
       "username": "win_desk_769959",
       "displayName": "win_desk_769959",
       "bio": "Photographer accessing via Windows Electron desktop app.",
-      "avatar": "",
+      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
       "location": "Tokyo Desktop",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_7f888263_19",
       "createdAt": "2026-11-09T18:42:50.882+00:00",
       "friends": [
         "browser_usr_769959"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -590,15 +652,17 @@
       "username": "browser_usr_792983",
       "displayName": "browser_usr_792983",
       "bio": "Photographer accessing via Chrome browser on macOS.",
-      "avatar": "",
+      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
       "location": "Berlin Web",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_7f888263_19",
       "createdAt": "2026-11-09T18:43:13.37+00:00",
       "friends": [
         "win_desk_792983"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -606,15 +670,17 @@
       "username": "win_desk_792983",
       "displayName": "win_desk_792983",
       "bio": "Photographer accessing via Windows Electron desktop app.",
-      "avatar": "",
+      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
       "location": "Tokyo Desktop",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_7f888263_19",
       "createdAt": "2026-11-09T18:43:13.59+00:00",
       "friends": [
         "browser_usr_792983"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -622,15 +688,17 @@
       "username": "browser_usr_804274",
       "displayName": "browser_usr_804274",
       "bio": "Photographer accessing via Chrome browser on macOS.",
-      "avatar": "",
+      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
       "location": "Berlin Web",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_7f888263_19",
       "createdAt": "2026-11-09T18:43:24.731+00:00",
       "friends": [
         "win_desk_804274"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -638,15 +706,17 @@
       "username": "win_desk_804274",
       "displayName": "win_desk_804274",
       "bio": "Photographer accessing via Windows Electron desktop app.",
-      "avatar": "",
+      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
       "location": "Tokyo Desktop",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_7f888263_19",
       "createdAt": "2026-11-09T18:43:25.034+00:00",
       "friends": [
         "browser_usr_804274"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -654,15 +724,17 @@
       "username": "browser_usr_831552",
       "displayName": "browser_usr_831552",
       "bio": "Photographer accessing via Chrome browser on macOS.",
-      "avatar": "",
+      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
       "location": "Berlin Web",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_7f888263_19",
       "createdAt": "2026-11-09T18:43:51.943+00:00",
       "friends": [
         "win_desk_831552"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -670,15 +742,17 @@
       "username": "win_desk_831552",
       "displayName": "win_desk_831552",
       "bio": "Photographer accessing via Windows Electron desktop app.",
-      "avatar": "",
+      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
       "location": "Tokyo Desktop",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_7f888263_19",
       "createdAt": "2026-11-09T18:43:52.238+00:00",
       "friends": [
         "browser_usr_831552"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -686,15 +760,17 @@
       "username": "browser_usr_878680",
       "displayName": "browser_usr_878680",
       "bio": "Photographer accessing via Chrome browser on macOS.",
-      "avatar": "",
+      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
       "location": "Berlin Web",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_7f888263_19",
       "createdAt": "2026-11-09T18:44:39.012+00:00",
       "friends": [
         "win_desk_878680"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -702,15 +778,17 @@
       "username": "win_desk_878680",
       "displayName": "win_desk_878680",
       "bio": "Photographer accessing via Windows Electron desktop app.",
-      "avatar": "",
+      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
       "location": "Tokyo Desktop",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_7f888263_19",
       "createdAt": "2026-11-09T18:44:39.304+00:00",
       "friends": [
         "browser_usr_878680"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -718,9 +796,9 @@
       "username": "k3nandaddy",
       "displayName": "k3nandaddy",
       "bio": "Noir Archive file sharing member.",
-      "avatar": "",
+      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
       "location": "Worldwide",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_15e1dd2e_15",
       "createdAt": "2026-11-09T18:46:20.679+00:00",
       "friends": [
         "daddy12",
@@ -728,6 +806,8 @@
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -737,13 +817,15 @@
       "bio": "Photographer accessing via Chrome browser on macOS.",
       "avatar": "",
       "location": "Berlin Web",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_7f888263_19",
       "createdAt": "2026-11-09T19:14:07.398+00:00",
       "friends": [
         "win_desk_646436"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -753,13 +835,15 @@
       "bio": "Photographer accessing via Windows Electron desktop app.",
       "avatar": "",
       "location": "Tokyo Desktop",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_7f888263_19",
       "createdAt": "2026-11-09T19:14:07.852+00:00",
       "friends": [
         "browser_usr_646436"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -769,13 +853,15 @@
       "bio": "Photographer accessing via Chrome browser on macOS.",
       "avatar": "",
       "location": "Berlin Web",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_7f888263_19",
       "createdAt": "2026-11-09T19:22:07.093+00:00",
       "friends": [
         "win_desk_126466"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -785,13 +871,15 @@
       "bio": "Photographer accessing via Windows Electron desktop app.",
       "avatar": "",
       "location": "Tokyo Desktop",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_7f888263_19",
       "createdAt": "2026-11-09T19:22:07.515+00:00",
       "friends": [
         "browser_usr_126466"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -801,13 +889,15 @@
       "bio": "Photographer accessing via Chrome browser on macOS.",
       "avatar": "",
       "location": "Berlin Web",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_7f888263_19",
       "createdAt": "2026-11-09T19:23:54.748+00:00",
       "friends": [
         "win_desk_233990"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -817,13 +907,15 @@
       "bio": "Photographer accessing via Windows Electron desktop app.",
       "avatar": "",
       "location": "Tokyo Desktop",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_7f888263_19",
       "createdAt": "2026-11-09T19:23:55.116+00:00",
       "friends": [
         "browser_usr_233990"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -833,13 +925,15 @@
       "bio": "Photographer accessing via Chrome browser on macOS.",
       "avatar": "",
       "location": "Berlin Web",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_7f888263_19",
       "createdAt": "2026-11-09T19:56:03.342+00:00",
       "friends": [
         "win_desk_162514"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -849,13 +943,15 @@
       "bio": "Photographer accessing via Windows Electron desktop app.",
       "avatar": "",
       "location": "Tokyo Desktop",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_7f888263_19",
       "createdAt": "2026-11-09T19:56:03.778+00:00",
       "friends": [
         "browser_usr_162514"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -865,13 +961,15 @@
       "bio": "Photographer accessing via Chrome browser on macOS.",
       "avatar": "",
       "location": "Berlin Web",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_7f888263_19",
       "createdAt": "2026-11-09T19:58:10.994+00:00",
       "friends": [
         "win_desk_290281"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -881,13 +979,15 @@
       "bio": "Photographer accessing via Windows Electron desktop app.",
       "avatar": "",
       "location": "Tokyo Desktop",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_7f888263_19",
       "createdAt": "2026-11-09T19:58:11.445+00:00",
       "friends": [
         "browser_usr_290281"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -897,13 +997,15 @@
       "bio": "Photographer accessing via Chrome browser on macOS.",
       "avatar": "",
       "location": "Berlin Web",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_7f888263_19",
       "createdAt": "2026-11-09T20:09:17.155+00:00",
       "friends": [
         "win_desk_956601"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -913,13 +1015,15 @@
       "bio": "Photographer accessing via Windows Electron desktop app.",
       "avatar": "",
       "location": "Tokyo Desktop",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_7f888263_19",
       "createdAt": "2026-11-09T20:09:17.502+00:00",
       "friends": [
         "browser_usr_956601"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -929,13 +1033,15 @@
       "bio": "Photographer accessing via Chrome browser on macOS.",
       "avatar": "",
       "location": "Berlin Web",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_7f888263_19",
       "createdAt": "2026-11-09T20:16:36.015+00:00",
       "friends": [
         "win_desk_395471"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -945,13 +1051,15 @@
       "bio": "Photographer accessing via Windows Electron desktop app.",
       "avatar": "",
       "location": "Tokyo Desktop",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_7f888263_19",
       "createdAt": "2026-11-09T20:16:36.295+00:00",
       "friends": [
         "browser_usr_395471"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -961,13 +1069,15 @@
       "bio": "Photographer accessing via Chrome browser on macOS.",
       "avatar": "",
       "location": "Berlin Web",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_7f888263_19",
       "createdAt": "2026-11-09T20:38:50.797+00:00",
       "friends": [
         "win_desk_730291"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -977,13 +1087,15 @@
       "bio": "Photographer accessing via Windows Electron desktop app.",
       "avatar": "",
       "location": "Tokyo Desktop",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_7f888263_19",
       "createdAt": "2026-11-09T20:38:51.089+00:00",
       "friends": [
         "browser_usr_730291"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -993,7 +1105,7 @@
       "bio": "Noir Archive file sharing member.",
       "avatar": "",
       "location": "Worldwide",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_3efa3ad0_8",
       "createdAt": "2026-11-09T21:14:16.891+00:00",
       "friends": [
         "k3nandaddy",
@@ -1001,6 +1113,8 @@
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -1010,13 +1124,15 @@
       "bio": "Photographer accessing via Chrome browser on macOS.",
       "avatar": "",
       "location": "Berlin Web",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_7f888263_19",
       "createdAt": "2026-11-09T23:59:40.158+00:00",
       "friends": [
         "win_desk_779631"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -1026,13 +1142,15 @@
       "bio": "Photographer accessing via Windows Electron desktop app.",
       "avatar": "",
       "location": "Tokyo Desktop",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_7f888263_19",
       "createdAt": "2026-11-09T23:59:40.406+00:00",
       "friends": [
         "browser_usr_779631"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -1042,13 +1160,15 @@
       "bio": "Photographer accessing via Chrome browser on macOS.",
       "avatar": "",
       "location": "Berlin Web",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_7f888263_19",
       "createdAt": "2026-11-10T00:01:04.787+00:00",
       "friends": [
         "win_desk_864074"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -1058,13 +1178,15 @@
       "bio": "Photographer accessing via Windows Electron desktop app.",
       "avatar": "",
       "location": "Tokyo Desktop",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_7f888263_19",
       "createdAt": "2026-11-10T00:01:05.053+00:00",
       "friends": [
         "browser_usr_864074"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -1074,13 +1196,15 @@
       "bio": "Photographer accessing via Chrome browser on macOS.",
       "avatar": "",
       "location": "Berlin Web",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_7f888263_19",
       "createdAt": "2026-11-10T00:32:07.183+00:00",
       "friends": [
         "win_desk_726335"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -1090,13 +1214,15 @@
       "bio": "Photographer accessing via Windows Electron desktop app.",
       "avatar": "",
       "location": "Tokyo Desktop",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_7f888263_19",
       "createdAt": "2026-11-10T00:32:07.774+00:00",
       "friends": [
         "browser_usr_726335"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -1106,13 +1232,15 @@
       "bio": "Photographer accessing via Chrome browser on macOS.",
       "avatar": "",
       "location": "Berlin Web",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_7f888263_19",
       "createdAt": "2026-11-10T13:19:23.231+00:00",
       "friends": [
         "win_desk_756696"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -1122,13 +1250,15 @@
       "bio": "Photographer accessing via Chrome browser on macOS.",
       "avatar": "",
       "location": "Berlin Web",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_7f888263_19",
       "createdAt": "2026-11-10T13:19:23.519+00:00",
       "friends": [
         "win_desk_720953"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -1138,13 +1268,15 @@
       "bio": "Photographer accessing via Windows Electron desktop app.",
       "avatar": "",
       "location": "Tokyo Desktop",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_7f888263_19",
       "createdAt": "2026-11-10T13:19:23.553+00:00",
       "friends": [
         "browser_usr_756696"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -1154,13 +1286,15 @@
       "bio": "Photographer accessing via Windows Electron desktop app.",
       "avatar": "",
       "location": "Tokyo Desktop",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_7f888263_19",
       "createdAt": "2026-11-10T13:19:23.714+00:00",
       "friends": [
         "browser_usr_720953"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -1170,13 +1304,15 @@
       "bio": "Photographer accessing via Chrome browser on macOS.",
       "avatar": "",
       "location": "Berlin Web",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_7f888263_19",
       "createdAt": "2026-11-10T14:03:00.996+00:00",
       "friends": [
         "win_desk_347978"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -1186,13 +1322,15 @@
       "bio": "Photographer accessing via Windows Electron desktop app.",
       "avatar": "",
       "location": "Tokyo Desktop",
-      "passwordHash": "hash_53ab39b7_11",
+      "passwordHash": "hash_7f888263_19",
       "createdAt": "2026-11-10T14:03:01.495+00:00",
       "friends": [
         "browser_usr_347978"
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -1200,13 +1338,15 @@
       "username": "probe_test_sync",
       "displayName": "probe_test_sync",
       "bio": "test",
-      "avatar": "",
+      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
       "location": "",
       "passwordHash": "hash_53ab39b7_11",
       "createdAt": "2026-11-10T14:06:11.489+00:00",
       "friends": [],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -1214,7 +1354,7 @@
       "username": "flow_test_user_a",
       "displayName": "flow_test_user_a",
       "bio": "Flow test sender",
-      "avatar": "",
+      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
       "location": "",
       "passwordHash": "hash_53ab39b7_11",
       "createdAt": "2026-11-10T14:12:16.978+00:00",
@@ -1223,6 +1363,8 @@
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
     },
     {
@@ -1230,7 +1372,7 @@
       "username": "flow_test_user_b",
       "displayName": "flow_test_user_b",
       "bio": "Flow test recipient",
-      "avatar": "",
+      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
       "location": "",
       "passwordHash": "hash_53ab39b7_11",
       "createdAt": "2026-11-10T14:12:17.249+00:00",
@@ -1239,7 +1381,48 @@
       ],
       "selectedTheme": "graphite",
       "groupPrivacy": "friends",
+      "settings": {},
+      "favoritePackageIds": [],
       "isAdult": true
+    },
+    {
+      "id": "user-1794332821726",
+      "username": "audit_test_1794332821683",
+      "bio": "Noir Archive file sharing member.",
+      "avatar": "",
+      "location": "Worldwide",
+      "passwordHash": "hash_7459f039_15",
+      "createdAt": "2026-11-10T17:47:01.726Z",
+      "friends": [],
+      "selectedTheme": "graphite",
+      "groupPrivacy": "friends",
+      "dateOfBirth": "1995-01-01",
+      "isAdult": true,
+      "oauthProvider": "email",
+      "activeSessions": [
+        {
+          "id": "sess_1794332822100_99eeb95d",
+          "client": "Web Client",
+          "ip": "127.0.0.1",
+          "lastActive": "Just now",
+          "current": true
+        },
+        {
+          "id": "sess_1794332821785_c6d9788d",
+          "client": "Web Client",
+          "ip": "127.0.0.1",
+          "lastActive": "Just now",
+          "current": true
+        }
+      ],
+      "displayName": "Audit Display",
+      "settings": {
+        "defaultExpiryDays": 14,
+        "matureContentFilter": "show"
+      },
+      "favoritePackageIds": [
+        "pkg-fav-1"
+      ]
     }
   ],
   "friendRequests": [
@@ -1538,6 +1721,27 @@
   "transfers": [],
   "publishedPackages": [
     {
+      "id": "pub-test-1794332809583",
+      "title": "Audit Package Edited",
+      "authorUsername": "audit_test_1794332809583",
+      "authorAvatar": "",
+      "coverUrl": "",
+      "files": [],
+      "description": "Testing metadata",
+      "tags": [],
+      "category": "other",
+      "isMature": false,
+      "downloadsEnabled": true,
+      "reportedBy": [],
+      "reportsCount": 0,
+      "fileCount": 0,
+      "totalSize": "0 B",
+      "downloadsCount": 0,
+      "likesCount": 0,
+      "likedBy": [],
+      "createdAt": "2026-11-10T17:46:50.065+00:00"
+    },
+    {
       "id": "PUB-9707",
       "title": "peter",
       "authorUsername": "daddy12",
@@ -1562,6 +1766,13 @@
         "files",
         "direct-download"
       ],
+      "category": "other",
+      "isMature": false,
+      "downloadsEnabled": true,
+      "reportedBy": [],
+      "reportsCount": 0,
+      "fileCount": 1,
+      "totalSize": "0 B",
       "downloadsCount": 0,
       "likesCount": 2,
       "likedBy": [
@@ -1595,6 +1806,13 @@
         "files",
         "direct-download"
       ],
+      "category": "other",
+      "isMature": false,
+      "downloadsEnabled": true,
+      "reportedBy": [],
+      "reportsCount": 0,
+      "fileCount": 1,
+      "totalSize": "0 B",
       "downloadsCount": 0,
       "likesCount": 2,
       "likedBy": [
@@ -1683,6 +1901,13 @@
         "files",
         "direct-download"
       ],
+      "category": "other",
+      "isMature": false,
+      "downloadsEnabled": true,
+      "reportedBy": [],
+      "reportsCount": 0,
+      "fileCount": 6,
+      "totalSize": "0 B",
       "downloadsCount": 0,
       "likesCount": 3,
       "likedBy": [
@@ -1717,6 +1942,13 @@
         "files",
         "direct-download"
       ],
+      "category": "other",
+      "isMature": false,
+      "downloadsEnabled": true,
+      "reportedBy": [],
+      "reportsCount": 0,
+      "fileCount": 1,
+      "totalSize": "0 B",
       "downloadsCount": 0,
       "likesCount": 2,
       "likedBy": [
@@ -1750,6 +1982,13 @@
         "files",
         "direct-download"
       ],
+      "category": "other",
+      "isMature": false,
+      "downloadsEnabled": true,
+      "reportedBy": [],
+      "reportsCount": 0,
+      "fileCount": 1,
+      "totalSize": "0 B",
       "downloadsCount": 1,
       "likesCount": 2,
       "likedBy": [
@@ -1780,6 +2019,13 @@
         "files",
         "direct-download"
       ],
+      "category": "other",
+      "isMature": false,
+      "downloadsEnabled": true,
+      "reportedBy": [],
+      "reportsCount": 0,
+      "fileCount": 1,
+      "totalSize": "0 B",
       "downloadsCount": 1,
       "likesCount": 2,
       "likedBy": [
@@ -1813,6 +2059,13 @@
         "files",
         "direct-download"
       ],
+      "category": "other",
+      "isMature": false,
+      "downloadsEnabled": true,
+      "reportedBy": [],
+      "reportsCount": 0,
+      "fileCount": 1,
+      "totalSize": "0 B",
       "downloadsCount": 1,
       "likesCount": 0,
       "likedBy": [],
@@ -1843,6 +2096,13 @@
         "files",
         "direct-download"
       ],
+      "category": "other",
+      "isMature": false,
+      "downloadsEnabled": true,
+      "reportedBy": [],
+      "reportsCount": 0,
+      "fileCount": 1,
+      "totalSize": "0 B",
       "downloadsCount": 1,
       "likesCount": 0,
       "likedBy": [],
@@ -1870,13 +2130,37 @@
         "photography",
         "free-download"
       ],
+      "category": "other",
+      "isMature": false,
+      "downloadsEnabled": true,
+      "reportedBy": [],
+      "reportsCount": 0,
+      "fileCount": 1,
+      "totalSize": "0 B",
       "downloadsCount": 0,
       "likesCount": 0,
       "likedBy": [],
       "createdAt": "2026-11-09T16:33:57.077+00:00"
     }
   ],
-  "reports": [],
+  "reports": [
+    {
+      "id": "rep-1794332810170",
+      "packageId": "pub-test-1794332809583",
+      "reportedBy": "audit_test_1794332809583",
+      "reason": "spam",
+      "details": "Audit check",
+      "createdAt": "2026-11-10T17:46:50.170Z"
+    },
+    {
+      "id": "rep-1794332822207",
+      "packageId": "pub-test-1794332821683",
+      "reportedBy": "audit_test_1794332821683",
+      "reason": "spam",
+      "details": "Audit check",
+      "createdAt": "2026-11-10T17:47:02.207Z"
+    }
+  ],
   "sessions": [
     {
       "id": "sess_1794256843767_b1fe14ae",
@@ -1898,6 +2182,50 @@
       "expiresAt": "2026-12-10T14:26:59.098Z",
       "lastActive": "2026-11-10T14:26:59.098Z",
       "client": "Chrome",
+      "ip": "127.0.0.1"
+    },
+    {
+      "id": "sess_1794332809728_b1365681",
+      "token": "7384ca9c86aacb046e8914668a6ea3e303251b1ec143461ff3c25f9f3fed1b1f",
+      "userId": "user-1794332809666",
+      "username": "audit_test_1794332809583",
+      "createdAt": "2026-11-10T17:46:49.729Z",
+      "expiresAt": "2026-12-10T17:46:49.729Z",
+      "lastActive": "2026-11-10T17:46:49.738Z",
+      "client": "Web Client",
+      "ip": "127.0.0.1"
+    },
+    {
+      "id": "sess_1794332809943_3fb4fbf9",
+      "token": "234b694acfce5e210437b255599d38696734f0ebe43a839a209c14b0b5b8e247",
+      "userId": "user-1794332809666",
+      "username": "audit_test_1794332809583",
+      "createdAt": "2026-11-10T17:46:49.943Z",
+      "expiresAt": "2026-12-10T17:46:49.943Z",
+      "lastActive": "2026-11-10T17:46:49.943Z",
+      "client": "Web Client",
+      "ip": "127.0.0.1"
+    },
+    {
+      "id": "sess_1794332821785_c6d9788d",
+      "token": "893cae22b660b360ef59aa3ffb79685df8b8bbcf4fc0dd423daa9300782c565a",
+      "userId": "user-1794332821726",
+      "username": "audit_test_1794332821683",
+      "createdAt": "2026-11-10T17:47:01.785Z",
+      "expiresAt": "2026-12-10T17:47:01.785Z",
+      "lastActive": "2026-11-10T17:47:01.818Z",
+      "client": "Web Client",
+      "ip": "127.0.0.1"
+    },
+    {
+      "id": "sess_1794332822100_99eeb95d",
+      "token": "5426caea510009d89f5256061a835ef5fbf4dc7719505e613249c13c5d215f4d",
+      "userId": "user-1794332821726",
+      "username": "audit_test_1794332821683",
+      "createdAt": "2026-11-10T17:47:02.100Z",
+      "expiresAt": "2026-12-10T17:47:02.100Z",
+      "lastActive": "2026-11-10T17:47:02.100Z",
+      "client": "Web Client",
       "ip": "127.0.0.1"
     }
   ],

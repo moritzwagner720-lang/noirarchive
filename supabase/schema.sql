@@ -111,6 +111,46 @@ ALTER TABLE public.users ADD COLUMN IF NOT EXISTS custom_avatar TEXT;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS date_of_birth DATE;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS oauth_id TEXT;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS oauth_provider TEXT;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS display_name TEXT;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS settings JSONB DEFAULT '{}'::JSONB;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS favorite_package_ids TEXT[] DEFAULT '{}'::TEXT[];
+
+-- Published packages metadata & moderation columns (Idempotent)
+ALTER TABLE public.published_packages ADD COLUMN IF NOT EXISTS category TEXT DEFAULT 'other';
+ALTER TABLE public.published_packages ADD COLUMN IF NOT EXISTS is_mature BOOLEAN DEFAULT false;
+ALTER TABLE public.published_packages ADD COLUMN IF NOT EXISTS downloads_enabled BOOLEAN DEFAULT true;
+ALTER TABLE public.published_packages ADD COLUMN IF NOT EXISTS reported_by TEXT[] DEFAULT '{}'::TEXT[];
+ALTER TABLE public.published_packages ADD COLUMN IF NOT EXISTS reports_count INTEGER DEFAULT 0;
+ALTER TABLE public.published_packages ADD COLUMN IF NOT EXISTS file_count INTEGER DEFAULT 0;
+ALTER TABLE public.published_packages ADD COLUMN IF NOT EXISTS total_size TEXT DEFAULT '0 B';
+
+-- Persistent Auth Sessions table
+CREATE TABLE IF NOT EXISTS public.auth_sessions (
+  id TEXT PRIMARY KEY,
+  token TEXT UNIQUE NOT NULL,
+  user_id TEXT NOT NULL,
+  username TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  expires_at TIMESTAMPTZ NOT NULL,
+  last_active TIMESTAMPTZ DEFAULT NOW(),
+  client TEXT DEFAULT 'Web Browser',
+  ip TEXT DEFAULT '127.0.0.1'
+);
+
+CREATE INDEX IF NOT EXISTS idx_auth_sessions_token ON public.auth_sessions (token);
+CREATE INDEX IF NOT EXISTS idx_auth_sessions_username ON public.auth_sessions (LOWER(username));
+
+-- Persistent Published Reports table
+CREATE TABLE IF NOT EXISTS public.published_reports (
+  id TEXT PRIMARY KEY,
+  package_id TEXT NOT NULL,
+  reported_by TEXT NOT NULL,
+  reason TEXT NOT NULL DEFAULT 'inappropriate',
+  details TEXT DEFAULT '',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_published_reports_package ON public.published_reports (package_id);
 
 -- Chat messages group, replies, and reactions columns (Idempotent)
 ALTER TABLE public.chat_messages ADD COLUMN IF NOT EXISTS group_id TEXT;
