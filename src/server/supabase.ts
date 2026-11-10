@@ -511,6 +511,22 @@ export async function createSupabaseFriendRequest(req: FriendRequestDTO): Promis
   return mapFriendRequestFromDb(data);
 }
 
+export async function getSupabaseFriendRequestById(id: string): Promise<FriendRequestDTO | null> {
+  if (!client) return null;
+  try {
+    const { data, error } = await client
+      .from('friend_requests')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (error || !data) return null;
+    return mapFriendRequestFromDb(data);
+  } catch {
+    return null;
+  }
+}
+
 export async function updateSupabaseFriendRequestStatus(id: string, status: string): Promise<void> {
   if (!client) return;
   const { error } = await client

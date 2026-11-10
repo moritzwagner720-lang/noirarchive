@@ -74,10 +74,24 @@ export function apiUrl(endpoint: string): string {
 }
 
 export async function apiFetch(endpoint: string, options: RequestInit = {}): Promise<Response> {
-  const url = apiUrl(endpoint);
+  const url = endpoint.startsWith('http://') || endpoint.startsWith('https://') ? endpoint : apiUrl(endpoint);
   const headers = new Headers(options.headers || {});
   if (!headers.has('Content-Type') && !(options.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json');
+  }
+
+  // Ensure persistent token is passed in Authorization header for cross-origin and iframe contexts
+  if (!headers.has('Authorization') && typeof localStorage !== 'undefined') {
+    try {
+      const token =
+        localStorage.getItem('noir_auth_session_token') ||
+        localStorage.getItem('noir_archive_session_token');
+      if (token && token.trim()) {
+        headers.set('Authorization', `Bearer ${token.trim()}`);
+      }
+    } catch {
+      // ignore storage access errors
+    }
   }
 
   return fetch(url, {

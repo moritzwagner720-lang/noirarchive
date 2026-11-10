@@ -938,6 +938,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         groupPrivacy: 'friends',
       };
 
+      if (resData.sessionToken && typeof localStorage !== 'undefined') {
+        localStorage.setItem('noir_auth_session_token', resData.sessionToken);
+      }
       setUsers(prev => [...prev.filter(u => u.username.toLowerCase() !== cleanUsername), authenticatedUser]);
       setCurrentUser(authenticatedUser);
       setAuthModal(null);
@@ -1006,6 +1009,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         groupPrivacy: 'friends',
       };
 
+      if (resData.sessionToken && typeof localStorage !== 'undefined') {
+        localStorage.setItem('noir_auth_session_token', resData.sessionToken);
+      }
       setUsers(prev => [...prev.filter(u => u.username.toLowerCase() !== authUser.username.toLowerCase()), authUser]);
       setCurrentUser(authUser);
       setOauthPendingData(null);
@@ -1043,6 +1049,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             map.set(authenticatedUser.username.toLowerCase(), authenticatedUser);
             return Array.from(map.values());
           });
+          if (data.sessionToken && typeof localStorage !== 'undefined') {
+            localStorage.setItem('noir_auth_session_token', data.sessionToken);
+          }
           setCurrentUser(authenticatedUser);
           setAuthModal(null);
 
@@ -1083,6 +1092,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setActiveSessions([]);
       try {
         localStorage.removeItem(STORAGE_KEY_CURRENT_USER);
+        localStorage.removeItem('noir_auth_session_token');
         sessionStorage.clear();
       } catch {}
     }
@@ -1098,6 +1108,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setActiveSessions([]);
       try {
         localStorage.removeItem(STORAGE_KEY_CURRENT_USER);
+        localStorage.removeItem('noir_auth_session_token');
         sessionStorage.clear();
       } catch {}
     }
@@ -1142,6 +1153,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (res.ok) {
           const data = await res.json();
           if (data.authenticated && data.user) {
+            if (data.sessionToken && typeof localStorage !== 'undefined') {
+              localStorage.setItem('noir_auth_session_token', data.sessionToken);
+            }
             if (isMounted) {
               const authUser: User = {
                 ...data.user,
@@ -1188,6 +1202,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           setCurrentUser(null);
           try {
             localStorage.removeItem(STORAGE_KEY_CURRENT_USER);
+            localStorage.removeItem('noir_auth_session_token');
             sessionStorage.clear();
           } catch {}
         }
@@ -1339,7 +1354,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
 
     try {
-      const res = await fetch(apiUrl('/api/friend-requests'), {
+      const res = await apiFetch('/api/friend-requests', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fromUsername: currentUser.username, toUsername: targetUser.username }),
@@ -1364,7 +1379,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const cancelFriendRequestAction = (requestId: string) => {
     try {
-      fetch(apiUrl(`/api/friend-requests/${encodeURIComponent(requestId)}/cancel`), { method: 'POST' }).catch(() => {});
+      apiFetch(`/api/friend-requests/${encodeURIComponent(requestId)}/cancel`, { method: 'POST' }).catch(() => {});
     } catch {}
     setFriendRequests(prev => prev.filter(r => r.id !== requestId));
   };
@@ -1374,7 +1389,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (!req || !currentUser) return;
 
     try {
-      fetch(apiUrl(`/api/friend-requests/${encodeURIComponent(requestId)}/accept`), { method: 'POST' }).catch(() => {});
+      apiFetch(`/api/friend-requests/${encodeURIComponent(requestId)}/accept`, { method: 'POST' }).catch(() => {});
     } catch {}
 
     setFriendRequests(prev => prev.map(r => (r.id === requestId ? { ...r, status: 'accepted' } : r)));
@@ -1401,16 +1416,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const declineFriendRequestAction = (requestId: string) => {
     try {
-      fetch(apiUrl(`/api/friend-requests/${encodeURIComponent(requestId)}/decline`), { method: 'POST' }).catch(() => {});
+      apiFetch(`/api/friend-requests/${encodeURIComponent(requestId)}/decline`, { method: 'POST' }).catch(() => {});
     } catch {}
     setFriendRequests(prev => prev.map(r => (r.id === requestId ? { ...r, status: 'declined' } : r)));
-  };
-
-  const cancelFriendRequestAction = (requestId: string) => {
-    try {
-      fetch(apiUrl(`/api/friend-requests/${encodeURIComponent(requestId)}/cancel`), { method: 'POST' }).catch(() => {});
-    } catch {}
-    setFriendRequests(prev => prev.filter(r => r.id !== requestId));
   };
 
   const removeFriendAction = async (targetUsername: string): Promise<{ success: boolean; error?: string }> => {

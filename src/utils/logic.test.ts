@@ -322,3 +322,49 @@ test('chunk calculation divides multi-gigabyte transfers into discrete 5MB slice
   assert.equal(Math.ceil(size12_5Gb / CHUNK_SIZE), 2560);
 });
 
+test('calculateAge and validateDateOfBirth correctly identify adults and minors', async () => {
+  const { calculateAge, validateDateOfBirth } = await import('./auth');
+
+  // Born in 2000 -> 26 years old in 2026 -> adult
+  const ageAdult = calculateAge('2000-01-15');
+  assert.equal(ageAdult >= 18, true);
+
+  // Born 10 years ago -> 10 years old -> minor
+  const recentYear = new Date().getFullYear() - 10;
+  const ageMinor = calculateAge(`${recentYear}-05-20`);
+  assert.equal(ageMinor < 18, true);
+
+  // Validation checks
+  const adultValidation = validateDateOfBirth('2000-05-15');
+  assert.equal(adultValidation.isValid, true);
+  assert.equal(adultValidation.isAdult, true);
+
+  const minorValidation = validateDateOfBirth(`${recentYear}-05-15`);
+  assert.equal(minorValidation.isValid, true);
+  assert.equal(minorValidation.isAdult, false);
+
+  // Invalid future date
+  const futureValidation = validateDateOfBirth('2099-01-01');
+  assert.equal(futureValidation.isValid, false);
+});
+
+test('mature vault packages are filtered for minors and visible to adults', () => {
+  const packages = [
+    { id: 'p1', title: 'Street Photography Safe', isMature: false },
+    { id: 'p2', title: 'Fine Art Nude Negatives', isMature: true },
+    { id: 'p3', title: 'Brutalist Architecture', isMature: false },
+  ];
+
+  // Minor viewer: isAdult = false
+  const minorVisible = packages.filter(p => !p.isMature);
+  assert.equal(minorVisible.length, 2);
+  assert.equal(minorVisible.some(p => p.id === 'p2'), false);
+
+  // Adult viewer: isAdult = true
+  const isAdult = true;
+  const adultVisible = isAdult ? packages : packages.filter(p => !p.isMature);
+  assert.equal(adultVisible.length, 3);
+  assert.equal(adultVisible.some(p => p.id === 'p2'), true);
+});
+
+

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { TransferFile, ChatAttachment, User, FriendGroup } from '../types';
+import { TransferFile, ChatAttachment, User, FriendGroup, ChatMessage } from '../types';
 import { UserAvatar } from './UserAvatar';
 import { FriendRequestsModal } from './FriendRequestsModal';
 import JSZip from 'jszip';
@@ -1329,8 +1329,6 @@ export const FriendsMessenger: React.FC = () => {
           </div>
         </div>
       )}
-        </div>
-      </div>
 
       {/* CREATE FRIEND GROUP MODAL */}
       {showCreateGroupModal && (

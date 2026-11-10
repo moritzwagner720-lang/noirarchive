@@ -19,6 +19,7 @@ import {
   updateSupabaseGroup,
   deleteSupabaseGroup,
   getSupabaseFriendRequests,
+  getSupabaseFriendRequestById,
   createSupabaseFriendRequest,
   updateSupabaseFriendRequestStatus,
   deleteSupabaseFriendRequest,
@@ -462,9 +463,42 @@ async function startServer() {
       console.warn(`[Noir Archive] Supabase connection check warning: ${supabaseStatus.message}`);
     }
   } else {
+    const upstreamUrl = process.env.NOIR_BACKEND_URL || 'https://noirarchive.onrender.com';
     console.log(
-      `[Noir Archive] Supabase Project: ${SUPABASE_PROJECT_REF} (${DEFAULT_SUPABASE_URL}). Local disk fallback active until SUPABASE_SERVICE_ROLE_KEY is set in .env.`
+      `[Noir Archive] Supabase Project: ${SUPABASE_PROJECT_REF} (${DEFAULT_SUPABASE_URL}). Checking cloud directory at ${upstreamUrl}...`
     );
+    try {
+      const upRes = await fetch(`${upstreamUrl}/api/users`, { signal: AbortSignal.timeout(6000) });
+      if (upRes.ok) {
+        const liveUsers: User[] = await upRes.json();
+        if (Array.isArray(liveUsers) && liveUsers.length > 0) {
+          const map = new Map<string, User>();
+          store.users.forEach(u => map.set(u.username.toLowerCase(), u));
+          liveUsers.forEach(u => {
+            const ex = map.get(u.username.toLowerCase());
+            map.set(u.username.toLowerCase(), {
+              id: u.id || `user-${u.username}`,
+              username: u.username,
+              displayName: u.displayName || u.username,
+              bio: u.bio || ex?.bio || '',
+              avatar: '',
+              customAvatar: u.customAvatar || ex?.customAvatar,
+              location: u.location || ex?.location || '',
+              passwordHash: ex?.passwordHash || hashPassword('password123'),
+              createdAt: u.createdAt || new Date().toISOString(),
+              friends: Array.from(new Set([...(u.friends || []), ...(ex?.friends || [])])),
+              selectedTheme: u.selectedTheme || ex?.selectedTheme || 'graphite',
+              groupPrivacy: u.groupPrivacy || ex?.groupPrivacy || 'friends',
+              isAdult: u.isAdult !== false,
+            });
+          });
+          store.users = Array.from(map.values());
+          console.log(`[Noir Archive] Populated local directory with ${liveUsers.length} live users from cloud database.`);
+        }
+      }
+    } catch (err: any) {
+      console.log(`[Noir Archive] Cloud directory sync note: ${err.message}`);
+    }
   }
 
   // CORS Middleware for universal cross-origin, mobile, and electron desktop support
@@ -760,6 +794,23 @@ async function startServer() {
 
     const stat = fs.statSync(fileRecord.filePath);
     const fileSize = stat.size;
+
+    // Strict Age Restriction: Backend enforcement on direct file downloads
+    const isMatureFile = (store.publishedPackages || []).some(
+      p => p.isMature && (p.files || []).some((f: any) => f.id === fileId || f.name === fileRecord.name)
+    );
+    if (isMatureFile) {
+      const sessionUser = getCurrentSessionUser(req);
+      const queryUsername = ((req.query.user as string) || '').replace(/^@/, '').toLowerCase().trim();
+      let isAdult = sessionUser?.isAdult;
+      if (isAdult === undefined && queryUsername) {
+        const u = store.users.find(user => user.username.toLowerCase() === queryUsername);
+        if (u) isAdult = u.isAdult;
+      }
+      if (!isAdult) {
+        return res.status(403).json({ error: 'Access denied: You must be 18 or older to access mature content.' });
+      }
+    }
     const range = req.headers.range;
 
     const safeFilename = encodeURIComponent(fileRecord.name);
@@ -863,10 +914,10 @@ async function startServer() {
       const users = await getSupabaseUsers();
       if (users.length > 0) {
         store.users = users;
-        return res.json(users.map(sanitizeUser));
+        return res.json(users.map(u => sanitizeUser(u)));
       }
     }
-    res.json(store.users.map(sanitizeUser));
+    res.json(store.users.map(u => sanitizeUser(u)));
   });
 
   // User search handler supporting:
@@ -893,6 +944,25 @@ async function startServer() {
             (u.bio && u.bio.toLowerCase().includes(query)) ||
             (u.location && u.location.toLowerCase().includes(query))
         );
+        if (matches.length === 0) {
+          try {
+            const upstreamUrl = process.env.NOIR_BACKEND_URL || 'https://noirarchive.onrender.com';
+            const upRes = await fetch(`${upstreamUrl}/api/users/search?q=${encodeURIComponent(query)}`, {
+              signal: AbortSignal.timeout(4000),
+            });
+            if (upRes.ok) {
+              const cloudMatches: User[] = await upRes.json();
+              if (Array.isArray(cloudMatches) && cloudMatches.length > 0) {
+                matches = cloudMatches;
+                cloudMatches.forEach(cu => {
+                  if (!store.users.some(u => u.username.toLowerCase() === cu.username.toLowerCase())) {
+                    store.users.push(cu);
+                  }
+                });
+              }
+            }
+          } catch {}
+        }
       }
     }
 
@@ -900,7 +970,7 @@ async function startServer() {
       matches = matches.filter(u => u.username.toLowerCase() !== exclude);
     }
 
-    return res.json(matches.map(sanitizeUser));
+    return res.json(matches.map(u => sanitizeUser(u)));
   }
 
   // Both search route formats supported
@@ -921,7 +991,23 @@ async function startServer() {
       }
     }
 
-    const user = store.users.find(u => u.username.toLowerCase() === username);
+    let user = store.users.find(u => u.username.toLowerCase() === username);
+    if (!user && !isSupabaseConfigured()) {
+      try {
+        const upstreamUrl = process.env.NOIR_BACKEND_URL || 'https://noirarchive.onrender.com';
+        const upRes = await fetch(`${upstreamUrl}/api/users/${encodeURIComponent(username)}`, {
+          signal: AbortSignal.timeout(4000),
+        });
+        if (upRes.ok) {
+          const cloudUser: User = await upRes.json();
+          if (cloudUser && cloudUser.username) {
+            store.users.push(cloudUser);
+            user = cloudUser;
+          }
+        }
+      } catch {}
+    }
+
     if (!user) {
       return res.status(404).json({ error: `User @${req.params.username} not found` });
     }
@@ -1539,7 +1625,7 @@ async function startServer() {
       broadcast('user_registered', sanitizeUser(added));
     }
 
-    res.json({ success: true, users: store.users.map(sanitizeUser) });
+    res.json({ success: true, users: store.users.map(u => sanitizeUser(u)) });
   });
 
   // Friend Requests - Get
@@ -1550,6 +1636,24 @@ async function startServer() {
       if (requests.length > 0 || user) {
         return res.json(requests);
       }
+    } else {
+      try {
+        const upstreamUrl = process.env.NOIR_BACKEND_URL || 'https://noirarchive.onrender.com';
+        const q = user ? `?user=${encodeURIComponent(user)}` : '';
+        const upRes = await fetch(`${upstreamUrl}/api/friend-requests${q}`, {
+          signal: AbortSignal.timeout(4000),
+        });
+        if (upRes.ok) {
+          const cloudReqs = await upRes.json();
+          if (Array.isArray(cloudReqs)) {
+            for (const cr of cloudReqs) {
+              const idx = store.friendRequests.findIndex(r => r.id === cr.id);
+              if (idx >= 0) store.friendRequests[idx] = cr;
+              else store.friendRequests.push(cr);
+            }
+          }
+        }
+      } catch {}
     }
 
     if (user) {
@@ -1619,6 +1723,16 @@ async function startServer() {
 
     if (isSupabaseConfigured()) {
       await createSupabaseFriendRequest(newRequest).catch(() => {});
+    } else {
+      try {
+        const upstreamUrl = process.env.NOIR_BACKEND_URL || 'https://noirarchive.onrender.com';
+        await fetch(`${upstreamUrl}/api/friend-requests`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fromUsername: from, toUsername: to }),
+          signal: AbortSignal.timeout(4000),
+        });
+      } catch {}
     }
 
     store.friendRequests.unshift(newRequest);
@@ -1631,15 +1745,51 @@ async function startServer() {
   // Friend Requests - Accept
   app.post('/api/friend-requests/:id/accept', async (req, res) => {
     const { id } = req.params;
-    const request = store.friendRequests.find(r => r.id === id);
+    let request = store.friendRequests.find(r => r.id === id);
+    if (!request && isSupabaseConfigured()) {
+      request = (await getSupabaseFriendRequestById(id)) || undefined;
+    }
+    if (!request && !isSupabaseConfigured()) {
+      try {
+        const upstreamUrl = process.env.NOIR_BACKEND_URL || 'https://noirarchive.onrender.com';
+        const upRes = await fetch(`${upstreamUrl}/api/friend-requests`, { signal: AbortSignal.timeout(4000) });
+        if (upRes.ok) {
+          const list = await upRes.json();
+          if (Array.isArray(list)) {
+            const found = list.find((r: any) => r.id === id);
+            if (found) {
+              store.friendRequests.push(found);
+              request = found;
+            }
+          }
+        }
+      } catch {}
+    }
     if (!request) {
       return res.status(404).json({ error: 'Friend request not found' });
     }
 
     request.status = 'accepted';
 
-    const u1 = store.users.find(u => u.username.toLowerCase() === request.fromUsername.toLowerCase());
-    const u2 = store.users.find(u => u.username.toLowerCase() === request.toUsername.toLowerCase());
+    let u1 = store.users.find(u => u.username.toLowerCase() === request!.fromUsername.toLowerCase());
+    let u2 = store.users.find(u => u.username.toLowerCase() === request!.toUsername.toLowerCase());
+
+    if (isSupabaseConfigured()) {
+      if (!u1) {
+        const dbU1 = await getSupabaseUserByUsername(request.fromUsername);
+        if (dbU1) {
+          store.users.push(dbU1 as User);
+          u1 = dbU1 as User;
+        }
+      }
+      if (!u2) {
+        const dbU2 = await getSupabaseUserByUsername(request.toUsername);
+        if (dbU2) {
+          store.users.push(dbU2 as User);
+          u2 = dbU2 as User;
+        }
+      }
+    }
 
     if (u1) {
       u1.friends = Array.from(new Set([...(u1.friends || []), request.toUsername]));
@@ -1652,17 +1802,28 @@ async function startServer() {
       await updateSupabaseFriendRequestStatus(id, 'accepted');
       if (u1) await updateSupabaseUserFriends(u1.username, u1.friends);
       if (u2) await updateSupabaseUserFriends(u2.username, u2.friends);
+    } else {
+      try {
+        const upstreamUrl = process.env.NOIR_BACKEND_URL || 'https://noirarchive.onrender.com';
+        await fetch(`${upstreamUrl}/api/friend-requests/${encodeURIComponent(id)}/accept`, {
+          method: 'POST',
+          signal: AbortSignal.timeout(4000),
+        });
+      } catch {}
     }
 
     saveStore(store);
-    broadcast('friend_request_accepted', { id, request, users: store.users.map(sanitizeUser) });
-    res.json({ success: true, users: store.users.map(sanitizeUser) });
+    broadcast('friend_request_accepted', { id, request, users: store.users.map(u => sanitizeUser(u)) });
+    res.json({ success: true, users: store.users.map(u => sanitizeUser(u)) });
   });
 
   // Friend Requests - Decline
   app.post('/api/friend-requests/:id/decline', async (req, res) => {
     const { id } = req.params;
-    const request = store.friendRequests.find(r => r.id === id);
+    let request = store.friendRequests.find(r => r.id === id);
+    if (!request && isSupabaseConfigured()) {
+      request = (await getSupabaseFriendRequestById(id)) || undefined;
+    }
     if (!request) {
       return res.status(404).json({ error: 'Friend request not found' });
     }
@@ -1670,6 +1831,14 @@ async function startServer() {
     request.status = 'declined';
     if (isSupabaseConfigured()) {
       await updateSupabaseFriendRequestStatus(id, 'declined');
+    } else {
+      try {
+        const upstreamUrl = process.env.NOIR_BACKEND_URL || 'https://noirarchive.onrender.com';
+        await fetch(`${upstreamUrl}/api/friend-requests/${encodeURIComponent(id)}/decline`, {
+          method: 'POST',
+          signal: AbortSignal.timeout(4000),
+        });
+      } catch {}
     }
     saveStore(store);
     broadcast('friend_request_declined', { id });
@@ -1682,6 +1851,14 @@ async function startServer() {
     store.friendRequests = store.friendRequests.filter(r => r.id !== id);
     if (isSupabaseConfigured()) {
       await deleteSupabaseFriendRequest(id);
+    } else {
+      try {
+        const upstreamUrl = process.env.NOIR_BACKEND_URL || 'https://noirarchive.onrender.com';
+        await fetch(`${upstreamUrl}/api/friend-requests/${encodeURIComponent(id)}/cancel`, {
+          method: 'POST',
+          signal: AbortSignal.timeout(4000),
+        });
+      } catch {}
     }
     saveStore(store);
     broadcast('friend_request_cancelled', { id });
@@ -1712,6 +1889,16 @@ async function startServer() {
       await removeSupabaseFriendship(currentUsername, targetUsername).catch(() => {});
       if (u1) await updateSupabaseUserFriends(u1.username, u1.friends).catch(() => {});
       if (u2) await updateSupabaseUserFriends(u2.username, u2.friends).catch(() => {});
+    } else {
+      try {
+        const upstreamUrl = process.env.NOIR_BACKEND_URL || 'https://noirarchive.onrender.com';
+        await fetch(`${upstreamUrl}/api/friends/${encodeURIComponent(targetUsername)}`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ currentUser: currentUsername }),
+          signal: AbortSignal.timeout(4000),
+        });
+      } catch {}
     }
 
     saveStore(store);
@@ -1741,6 +1928,24 @@ async function startServer() {
         groups = store.groups;
       }
     }
+    if (groups.length === 0 && !isSupabaseConfigured()) {
+      try {
+        const upstreamUrl = process.env.NOIR_BACKEND_URL || 'https://noirarchive.onrender.com';
+        const q = clean ? `?user=${encodeURIComponent(clean)}` : '';
+        const upRes = await fetch(`${upstreamUrl}/api/groups${q}`, { signal: AbortSignal.timeout(4000) });
+        if (upRes.ok) {
+          const upGroups = await upRes.json();
+          if (Array.isArray(upGroups) && upGroups.length > 0) {
+            groups = upGroups;
+            for (const g of upGroups) {
+              const idx = (store.groups || []).findIndex(x => x.id === g.id);
+              if (idx >= 0) store.groups[idx] = g;
+              else (store.groups = store.groups || []).push(g);
+            }
+          }
+        }
+      } catch {}
+    }
 
     res.json(groups || []);
   });
@@ -1768,6 +1973,16 @@ async function startServer() {
 
     if (isSupabaseConfigured()) {
       await createSupabaseGroup(newGroup).catch(() => {});
+    } else {
+      try {
+        const upstreamUrl = process.env.NOIR_BACKEND_URL || 'https://noirarchive.onrender.com';
+        await fetch(`${upstreamUrl}/api/groups`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newGroup),
+          signal: AbortSignal.timeout(4000),
+        });
+      } catch {}
     }
 
     store.groups = store.groups || [];
@@ -1918,6 +2133,24 @@ async function startServer() {
         if (messages.length > 0) {
           return res.json(messages);
         }
+      } else {
+        try {
+          const upstreamUrl = process.env.NOIR_BACKEND_URL || 'https://noirarchive.onrender.com';
+          const upRes = await fetch(`${upstreamUrl}/api/chat-messages?groupId=${encodeURIComponent(groupId)}`, {
+            signal: AbortSignal.timeout(4000),
+          });
+          if (upRes.ok) {
+            const upMsgs = await upRes.json();
+            if (Array.isArray(upMsgs) && upMsgs.length > 0) {
+              for (const m of upMsgs) {
+                if (!store.chatMessages.some(existing => existing.id === m.id)) {
+                  store.chatMessages.push(m);
+                }
+              }
+              return res.json(upMsgs);
+            }
+          }
+        } catch {}
       }
       const groupMsgs = store.chatMessages.filter(m => m.groupId === groupId);
       return res.json(groupMsgs);
@@ -1928,6 +2161,25 @@ async function startServer() {
       if (messages.length > 0 || (user1 && user2)) {
         return res.json(messages);
       }
+    } else if (user1 && user2) {
+      try {
+        const upstreamUrl = process.env.NOIR_BACKEND_URL || 'https://noirarchive.onrender.com';
+        const upRes = await fetch(
+          `${upstreamUrl}/api/chat-messages?user1=${encodeURIComponent(user1)}&user2=${encodeURIComponent(user2)}`,
+          { signal: AbortSignal.timeout(4000) }
+        );
+        if (upRes.ok) {
+          const upMsgs = await upRes.json();
+          if (Array.isArray(upMsgs) && upMsgs.length > 0) {
+            for (const m of upMsgs) {
+              if (!store.chatMessages.some(existing => existing.id === m.id)) {
+                store.chatMessages.push(m);
+              }
+            }
+            return res.json(upMsgs);
+          }
+        }
+      } catch {}
     }
 
     if (user1 && user2) {
@@ -1973,6 +2225,16 @@ async function startServer() {
 
     if (isSupabaseConfigured()) {
       await createSupabaseChatMessage(newMessage).catch(() => {});
+    } else {
+      try {
+        const upstreamUrl = process.env.NOIR_BACKEND_URL || 'https://noirarchive.onrender.com';
+        await fetch(`${upstreamUrl}/api/chat-messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newMessage),
+          signal: AbortSignal.timeout(4000),
+        });
+      } catch {}
     }
 
     store.chatMessages.push(newMessage);
@@ -2151,8 +2413,22 @@ async function startServer() {
         allPublished = dbPublished;
       }
     }
-    if (allPublished.length === 0) {
-      allPublished = store.publishedPackages || [];
+    if (allPublished.length === 0 && store.publishedPackages) {
+      allPublished = store.publishedPackages;
+    }
+    if (allPublished.length === 0 && !isSupabaseConfigured()) {
+      try {
+        const upstreamUrl = process.env.NOIR_BACKEND_URL || 'https://noirarchive.onrender.com';
+        const upRes = await fetch(`${upstreamUrl}/api/published`, { signal: AbortSignal.timeout(4000) });
+        if (upRes.ok) {
+          const upPub = await upRes.json();
+          if (Array.isArray(upPub) && upPub.length > 0) {
+            allPublished = upPub;
+            store.publishedPackages = upPub;
+            saveStore(store);
+          }
+        }
+      } catch {}
     }
 
     const sessionUser = getCurrentSessionUser(req);
@@ -2170,6 +2446,53 @@ async function startServer() {
 
     const safePublished = allPublished.filter(p => !p.isMature);
     res.json(safePublished);
+  });
+
+  // Published Package - Get Single by ID (with age verification)
+  app.get('/api/published/:id', async (req, res) => {
+    const { id } = req.params;
+    let pkg = (store.publishedPackages || []).find(p => p.id === id);
+    if (!pkg && isSupabaseConfigured()) {
+      const all = await getSupabasePublished();
+      pkg = all.find((p: any) => p.id === id);
+    }
+    if (!pkg && !isSupabaseConfigured()) {
+      try {
+        const upstreamUrl = process.env.NOIR_BACKEND_URL || 'https://noirarchive.onrender.com';
+        const upRes = await fetch(`${upstreamUrl}/api/published`, { signal: AbortSignal.timeout(4000) });
+        if (upRes.ok) {
+          const upPub = await upRes.json();
+          if (Array.isArray(upPub)) {
+            pkg = upPub.find((p: any) => p.id === id);
+            if (pkg) {
+              store.publishedPackages = store.publishedPackages || [];
+              if (!store.publishedPackages.some(p => p.id === id)) {
+                store.publishedPackages.push(pkg);
+              }
+            }
+          }
+        }
+      } catch {}
+    }
+
+    if (!pkg) {
+      return res.status(404).json({ error: 'Published package not found' });
+    }
+
+    if (pkg.isMature) {
+      const sessionUser = getCurrentSessionUser(req);
+      const queryUsername = ((req.query.user as string) || '').replace(/^@/, '').toLowerCase().trim();
+      let isAdult = sessionUser?.isAdult;
+      if (isAdult === undefined && queryUsername) {
+        const u = store.users.find(user => user.username.toLowerCase() === queryUsername);
+        if (u) isAdult = u.isAdult;
+      }
+      if (!isAdult) {
+        return res.status(403).json({ error: 'Access denied: You must be 18 or older to view mature content.' });
+      }
+    }
+
+    res.json(pkg);
   });
 
   // Published Packages - Create

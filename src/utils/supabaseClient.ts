@@ -89,11 +89,18 @@ export async function signInWithOAuth(provider: 'google' | 'discord'): Promise<{
   }
 }
 
+export const initiateOAuthSignIn = signInWithOAuth;
+
 /**
  * Checks if returning from Supabase OAuth redirect and extracts the user session.
  */
 export async function checkOAuthRedirectSession(): Promise<{
   hasOAuthSession: boolean;
+  oauthId?: string;
+  email?: string;
+  provider?: string;
+  suggestedUsername?: string;
+  avatarUrl?: string;
   user?: {
     id: string;
     email?: string;
@@ -134,6 +141,11 @@ export async function checkOAuthRedirectSession(): Promise<{
 
     return {
       hasOAuthSession: true,
+      oauthId: user.id,
+      email,
+      provider,
+      suggestedUsername,
+      avatarUrl,
       user: {
         id: user.id,
         email,
